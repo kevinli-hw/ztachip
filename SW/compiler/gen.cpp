@@ -99,7 +99,7 @@ int cGEN::decode_array(cInstructions *instructions,cAstNode *_root,cAstNode *_fu
       return -1;
    }
    id=CAST(cAstIdentifierNode,node)->getIdentifier();
-   if(!id->isKindOf(cIdentifierStorage::getCLID()) && 
+   if(!id->isKindOf(cIdentifierStorage::getCLID()) &&
       !id->isKindOf(cIdentifierConst::getCLID()))
    {
       error(node->m_lineNo,"Invalid array");
@@ -272,7 +272,7 @@ int cGEN::decode_array(cInstructions *instructions,cAstNode *_root,cAstNode *_fu
                   new cTerm_IMU_Integer(CAST(cIdentifierInteger,id3)),
                   new cTerm_IMU_Constant(dim_size),
                   new cTerm_IMU_Integer(*_i));
-               instructions->append(instruction2);            
+               instructions->append(instruction2);
             }
          }
       }
@@ -531,14 +531,14 @@ cTerm *cGEN::genTermAssignmentExpression(cInstructions *instructions,cAstNode *_
          error(node2->m_lineNo,"Invalid floating point operation");
       x1=y;
       oc=cConfig::IOPCODE_SHR;
-   }   
+   }
    else if(assignment->getID()==eTOKEN_OR_ASSIGN)
    {
       if(isMU)
          error(node2->m_lineNo,"Invalid floating point operation");
       x1=y;
       oc=cConfig::IOPCODE_OR;
-   }   
+   }
    else if(assignment->getID()==eTOKEN_AND_ASSIGN)
    {
       if(isMU)
@@ -552,6 +552,14 @@ cTerm *cGEN::genTermAssignmentExpression(cInstructions *instructions,cAstNode *_
          error(node2->m_lineNo,"Invalid floating point operation");
       x1=y;
       oc=cConfig::IOPCODE_XOR;
+   }
+   else if(assignment->getID()==eTOKEN_DIV_ASSIGN)
+   {
+      x1=y;
+      if(isMU)
+         oc=cConfig::OPCODE_DIV;
+      else
+         error(node2->m_lineNo,"DIV not suppported for IMU");
    }
    else if(assignment->getID()==eTOKEN_assignment_operator)
    {
@@ -641,7 +649,7 @@ cTerm *cGEN::genTermPostIncrementDecrement(cInstructions *instructions,cAstNode 
          error(y_node->m_lineNo,"\nInvalid parameter\n");
       x2=new cTerm_IMU_Constant(1);
       instruction= new cInstruction(node);
-      instruction->createIMU(oc,CAST(cTerm_IMU,x1),CAST(cTerm_IMU,x2),CAST(cTerm_IMU,y));   
+      instruction->createIMU(oc,CAST(cTerm_IMU,x1),CAST(cTerm_IMU,x2),CAST(cTerm_IMU,y));
       instructions->append(instruction);
       return y2;
    }
@@ -946,13 +954,13 @@ cTerm *cGEN::genTermFunction(cInstructions *instructions,cAstNode *_root,cAstNod
    }
    else
       error(oc_node->m_lineNo,"Invalid opcode");
-   if(cConfig::GetMuOpcodeDef(oc)->x2_type==cConfig::eMuOpcodeDefDataTypeFloat)    
+   if(cConfig::GetMuOpcodeDef(oc)->x2_type==cConfig::eMuOpcodeDefDataTypeFloat)
    {
       if(!x2_node)
          error(x1_node->m_lineNo,"Too few parameter");
       x2=genTerm(instructions,_root,func,x2_node,false,false,true);
    }
-   else if(cConfig::GetMuOpcodeDef(oc)->x2_type==cConfig::eMuOpcodeDefDataTypeInt) 
+   else if(cConfig::GetMuOpcodeDef(oc)->x2_type==cConfig::eMuOpcodeDefDataTypeInt)
    {
       if(!x2_node)
          error(x1_node->m_lineNo,"Too few parameter");
@@ -1062,7 +1070,7 @@ cTerm *cGEN::genTermFunction(cInstructions *instructions,cAstNode *_root,cAstNod
    else
    {
       y=new cTerm_MU_Null();
-      y_ret=y;         
+      y_ret=y;
    }
    instruction->createMU(
       swap?oc+4:oc,
@@ -1281,6 +1289,13 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
          else
             error(node2->m_lineNo,"Operation not supported for floating point");
          break;
+      case eTOKEN_multiplicative_expression_div:
+   	     if(!_isMU)
+            //oc = cConfig::IOPCODE_DIV;  //
+	       ;
+         else
+            oc = cConfig::OPCODE_DIV;
+         break;
       default:
          error(node2->m_lineNo,"Invalid operator");
          break;
@@ -1290,7 +1305,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
       {
          cIdentifier *temp;
          if((temp=new cIdentifierInteger(func->getChild(1,eTOKEN_block_item_list),0,0,false,false,-1)))
-         {  
+         {
             y=new cTerm_IMU_Integer(CAST(cIdentifierInteger,temp));
          }
          else
@@ -1320,7 +1335,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
       instruction=new cInstruction(node);
       if(!_isMU)
       {
-         if(!x1->isKindOf(cTerm_IMU::getCLID()) || 
+         if(!x1->isKindOf(cTerm_IMU::getCLID()) ||
             !x2->isKindOf(cTerm_IMU::getCLID()) ||
             !y->isKindOf(cTerm_IMU::getCLID()))
             error(node2->m_lineNo,"Invalid mix for floating point and integer");
@@ -1328,13 +1343,13 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
       }
       else
       {
-         if(!x1->isKindOf(cTerm_MU::getCLID()) || 
+         if(!x1->isKindOf(cTerm_MU::getCLID()) ||
             !x2->isKindOf(cTerm_MU::getCLID()) ||
             !y->isKindOf(cTerm_MU::getCLID()))
             error(node2->m_lineNo,"Invalid mix for floating point and integer");
          if((oc==cConfig::OPCODE_SHRA || oc==cConfig::OPCODE_SHLA) && x1->isKindOf(cTerm_MU_Integer::getCLID()))
          {
-            // Do inline expansion. Repease shift instruction because each shift instruction can only do upto MAX_SHIFT_DISTANCE 
+            // Do inline expansion. Repease shift instruction because each shift instruction can only do upto MAX_SHIFT_DISTANCE
             // For now inline expansion only available for y=_A << i where i is an integer type variable
             cInstruction *lastInstruction,*instruction2,*instruction3;
             cIdentifierInteger *id,*temp;
@@ -1357,7 +1372,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
                                    CAST(cTerm_MU,xacc));
             instructions->append(instruction2);
 
-            // temp=i=3; if (temp <= 0) goto exit 
+            // temp=i=3; if (temp <= 0) goto exit
             instruction2= new cInstruction(node);
             instruction2->createConditionalJump(cConfig::OPCODE_JUMP_LE,cConfig::IOPCODE_SUB,
                                                new cTerm_IMU_Integer(CAST(cIdentifierInteger,id)),
@@ -1377,7 +1392,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
                                    CAST(cTerm_MU,tterm));
             instructions->append(instruction2);
 
-            // if (temp > 0) goto repeat 
+            // if (temp > 0) goto repeat
             instruction3= new cInstruction(node);
             instruction3->createConditionalJump(cConfig::OPCODE_JUMP_GT,cConfig::IOPCODE_SUB,
                                                new cTerm_IMU_Integer(CAST(cIdentifierInteger,id)),
@@ -1386,7 +1401,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
                                                instruction2,
                                                false);
             instructions->append(instruction3);
-            
+
             // Copy TEMP to final variable.
 
              lastInstruction->createMU(oc,
@@ -1434,7 +1449,7 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
                int oc2;
                if(oc==cConfig::OPCODE_SHR)
                   oc2=cConfig::OPCODE_SHRA;
-               else 
+               else
                   oc2=cConfig::OPCODE_SHLA;
                delete instruction;
                instruction=0;
@@ -1467,7 +1482,44 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
                }
             }
          }
-         else 
+         else if ((oc==cConfig::OPCODE_DIV))
+         {
+            // Custom vector DIV: V / x ≈ (V * M) >> n
+ 	          float divisor;
+ 	          if (x2->isKindOf(cTerm_MU_Constant::getCLID())) {
+                divisor = CAST(cTerm_MU_Constant, x2)->m_c;
+          	} else {
+                error(node2->m_lineNo, "DIV requires constant scalar as divisor.");
+                return nullptr;
+            }
+           	printf("divisor = %f\n",divisor);
+
+          	// Encode divisor into multiplier M and shift amount n
+          	int M = 64, n = 8;
+          	if (divisor != 0.0f) {
+                float reciprocal = 1.0f / divisor;
+                n = 0;
+                while ((reciprocal * (1 << n)) < 64.0f && n < 15) ++n;
+                M = (int)(reciprocal * (1 << n));
+                if (M > 127) M = 127;
+           	}
+          	int encoded_scalar = (M << 4) | (n & 0xF);
+            printf("encoded_scalar = 0x%x\n",encoded_scalar);
+
+          	//x2 = new cTerm_MU_Constant((float)encoded_scalar);
+	          CAST(cTerm_MU_Constant, x2)->m_c = encoded_scalar;
+	          printf("CAST(cTerm_MU_Constant, x2)->m_c is %f\n", CAST(cTerm_MU_Constant, x2)->m_c);
+
+    	      instruction->createMU(oc,
+       	    CAST(cTerm_MU, x1),
+       	    //new cTerm_MU_Constant((int)(encoded_scalar)),
+       	    CAST(cTerm_MU, x2),
+       	    //x2,
+       	    CAST(cTerm_MU, y), // y remains as output
+       	    xacc?CAST(cTerm_MU,xacc):0);
+            printf("!!x2 is %f!!\n", CAST(cTerm_MU_Constant, x2)->m_c);
+         }
+         else
          {
             instruction->createMU(oc,CAST(cTerm_MU,x1),CAST(cTerm_MU,x2),CAST(cTerm_MU,y),xacc?CAST(cTerm_MU,xacc):0);
          }
@@ -1655,7 +1707,7 @@ cTerm *cGEN::genTermDirectIndexing(cInstructions *instructions,cAstNode *_root,c
          if(id->isKindOf(cIdentifierStorage::getCLID()))
             return new cTerm_MU_StorageWithIndex(CAST(cIdentifierStorage,id),CAST(cIdentifierInteger,array_i),array_c,subVector);
          else if(id->isKindOf(cIdentifierConst::getCLID()))
-         {         
+         {
             cInstruction *instruction2;
             cTerm *term,*term2;
             cIdentifierPointer *id2;
@@ -1680,14 +1732,14 @@ cTerm *cGEN::genTermDirectIndexing(cInstructions *instructions,cAstNode *_root,c
       cTerm_IMU *term=0,*term2;
       cInstruction *instruction2;
       if(num_dim>=id->getNumDim())
-      { 
-         // All dimention are specified. This must be a reference 
+      {
+         // All dimention are specified. This must be a reference
          if(!ref)
             error(arrayNode->m_lineNo,"Syntax error");
       }
       else
       {
-         if(!id->isKindOf(cIdentifierPrivate::getCLID()) && 
+         if(!id->isKindOf(cIdentifierPrivate::getCLID()) &&
             !id->isKindOf(cIdentifierShared::getCLID()))
             error(arrayNode->m_lineNo,"Invalid variable reference");
       }
@@ -1699,7 +1751,7 @@ cTerm *cGEN::genTermDirectIndexing(cInstructions *instructions,cAstNode *_root,c
          if(CAST(cIdentifierPointer,term2->m_id)->m_width > 0)
          {
             if(!id->isKindOf(cIdentifierStorage::getCLID()) ||
-               CAST(cIdentifierStorage,id)->m_w==0 || 
+               CAST(cIdentifierStorage,id)->m_w==0 ||
                subVector)
             {
                error(arrayNode->m_lineNo,"Invalid pointer assignment");
@@ -1952,6 +2004,7 @@ cTerm *cGEN::genTerm(cInstructions *instructions,cAstNode *_root,cAstNode *func,
    case eTOKEN_inclusive_or_expression:
    case eTOKEN_and_expression:
    case eTOKEN_exclusive_or_expression:
+   case eTOKEN_multiplicative_expression_div:
       return genTermCalculation(instructions,_root,func,node,_isExReg,ref,_isMU,_y);
    case eTOKEN_IDENTIFIER:
       return genTermIdentifier(instructions,_root,func,node,ref,_isMU,_y);
@@ -1972,7 +2025,7 @@ cTerm *cGEN::genTerm(cInstructions *instructions,cAstNode *_root,cAstNode *func,
       if(!node)
          error(arrayNode->m_lineNo,"This C-syntax is not supported by this compiler");
       id=CAST(cAstIdentifierNode,node)->getIdentifier();
-      if(id->isKindOf(cIdentifierStorage::getCLID()) || 
+      if(id->isKindOf(cIdentifierStorage::getCLID()) ||
          id->isKindOf(cIdentifierConst::getCLID()))
       {
          return genTermDirectIndexing(instructions,_root,func,arrayNode,ref,_isMU,_y);
@@ -1981,13 +2034,10 @@ cTerm *cGEN::genTerm(cInstructions *instructions,cAstNode *_root,cAstNode *func,
       {
          return genTermPointerIndexing(instructions,_root,func,arrayNode,ref,_isMU,_y);
       }
-      else 
+      else
       {
          error(node->m_lineNo,"Invalid array indexing");
       }
-      break;
-   case eTOKEN_multiplicative_expression_div:
-      error(node->m_lineNo,"Divide operation is not supported");
       break;
    case eTOKEN_multiplicative_expression_mod:
       error(node->m_lineNo,"Modulor operation is not supported");
@@ -2234,7 +2284,7 @@ cInstruction *cGEN::genStatement(cInstructions *instructions,cAstNode *_root,cAs
          if(!blockExitInstruction)
             error(_node->m_lineNo,"Invalid break");
          instruction->createUnconditionalJump(cConfig::OPCODE_JUMP,blockContInstruction,false);
-      } 
+      }
       else
          error(_node->m_lineNo,"Invalid C-statement");
       break;
@@ -2605,7 +2655,7 @@ void cGEN::process_init(cInstructions *instructions,cAstNode *node)
    attr=CAST(cAstCodeBlockNode,node)->getIdentifierList();
    while(attr)
    {
-      if(attr->isKindOf(cIdentifierStorage::getCLID()) && 
+      if(attr->isKindOf(cIdentifierStorage::getCLID()) &&
          CAST(cIdentifierStorage,attr)->m_w >= 1)
          subVector=true;
       else
@@ -2681,14 +2731,14 @@ bool cGEN::identifierIsMod(cAstNode *node,cIdentifier *id)
       node->getID()==eTOKEN_postfix_expression8)
    {
       node2=node->getChildList();
-      if(node2->getID()==eTOKEN_IDENTIFIER && 
+      if(node2->getID()==eTOKEN_IDENTIFIER &&
          CAST(cAstIdentifierNode,node2)->getIdentifier()==id)
          return true;
    }
    else if(node->getID()==eTOKEN_unary_expression)
    {
       node2=(cAstNode *)node->getChildList()->getNext();
-      if(node2->getID()==eTOKEN_IDENTIFIER && 
+      if(node2->getID()==eTOKEN_IDENTIFIER &&
          CAST(cAstIdentifierNode,node2)->getIdentifier()==id)
          return true;
    }
@@ -3070,7 +3120,7 @@ cInstruction *cGEN::process_code_block(cInstructions *instructions,cAstNode *_ro
          statement4=statement3;
          statement3=0;
       }
-      if(strcasecmp(forNode->m_pragma.c_str(),"unroll")==0 && 
+      if(strcasecmp(forNode->m_pragma.c_str(),"unroll")==0 &&
          loopUnroll(statement1,statement2,statement3,statement4,&fromIndex,&toIndex,&stepIndex,&for_id))
       {
          int index;
@@ -3122,7 +3172,7 @@ cInstruction *cGEN::process_code_block(cInstructions *instructions,cAstNode *_ro
                         for_exit_instruction,for_cont_instruction,true);
          instructions->append(for_exit_instruction);
       }
-      } 
+      }
       break;
    case eTOKEN_declaration:
       break;
@@ -3154,7 +3204,7 @@ cInstruction *cGEN::process_code_block(cInstructions *instructions,cAstNode *_ro
       }
       break;
    case eTOKEN_jump_statement:
-      // goto 
+      // goto
       genStatement(instructions,_root,func,node4,0,true,hasExitCode,exitInstruction,0,false,blockExitInstruction,blockContInstruction);
       break;
    default:
@@ -3260,7 +3310,7 @@ int cGEN::gen(cAstNode *_root)
             node3=node->getChild(2,eTOKEN_declarator,eTOKEN_IDENTIFIER);
          assert(node3!=0);
          begin->setLabel(CAST(cAstStringNode,node3)->getStringValue());
-      } 
+      }
       node=(cAstNode *)node->getNext();
    }
    return 0;

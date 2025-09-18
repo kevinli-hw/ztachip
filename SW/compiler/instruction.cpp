@@ -25,25 +25,25 @@
 //
 // At each clock, 1 VLIW instruction can execute 1 vector operation + 1 scalar operation and 1 branching instruction
 // branching instruction is based on result value Y in the scalar operation
-// pcore has a throughput of 1 VLIW instruction per clock. 
+// pcore has a throughput of 1 VLIW instruction per clock.
 
 // pcore assembly has the following format
-// 
+//
 //  MU : Instruction for the vector ALU, it has 3 input (X1,X1,ACCUMULATOR) and 1 output.
 //     OPCODE     [5 bit ] opcode for vector unit
-//     Y_TYPE     [1 bit ] 1 means Y is a accumulator,0 means Y is a word (12bit) 
+//     Y_TYPE     [1 bit ] 1 means Y is a accumulator,0 means Y is a word (12bit)
 //     ACC_VECTOR [1 bit ] Accumulator input is vector
 //     ACC        [12 bit] Accumulator input identifier
 //     ACC_ATTR   [4 bit ] Accumulator input attribute. ACC and ACC_ATTR uniquely identifies which accumulator register
 //     X1_VECTOR  [1 bit ] X1 input is vector
 //     X1         [12 bit] X1 input identifier
-//     X1_ATTR    [4 bit ] X1 input attribute. X1 and X1_ATTR uniquely identifies X1 memory address 
+//     X1_ATTR    [4 bit ] X1 input attribute. X1 and X1_ATTR uniquely identifies X1 memory address
 //     X2_VECTOR  [1 bit ] X2 input is vector
 //     X2         [12 bit] X2 input identifier
-//     X2_ATTR    [4 bit ] X2 input attribute. X2 and X2_ATTR uniquely identifies X2 memory address 
+//     X2_ATTR    [4 bit ] X2 input attribute. X2 and X2_ATTR uniquely identifies X2 memory address
 //     Y_VECTOR   [1 bit ] Y output is vector
 //     Y          [12 bit] Y output identifier
-//     Y_ATTR     [4 bit ] Y output attribute. Y and Y_ATTR uniquely identifies Y memory address 
+//     Y_ATTR     [4 bit ] Y output attribute. Y and Y_ATTR uniquely identifies Y memory address
 // IMU : Instruction to scalar ALU unit
 //     OPCODE     [5 bit ] Scalar ALU opcode
 //     X1         [4 bit ] X1 identifier
@@ -62,16 +62,16 @@
 //    1010  Constant
 //    00xx  Share with index
 //    01xx  Private with index
-// 
+//
 // Scalar ALU parameter attribute options are:
 //    1010   Zero value
-//    1011   Constant from IMU instruction constant field 
+//    1011   Constant from IMU instruction constant field
 //    1100   Thread id
 //    1101   PID id
 //    1110   RESULT from previous MU operation
 //    1000   LANE register. To enable/disable a vector lane
 //    Others Register value (0-7)
-// 
+//
 
 #include <assert.h>
 #include <string.h>
@@ -240,12 +240,12 @@ RETCODE cInstruction::createMU(int oc,cTerm_MU *x1,cTerm_MU *x2,cTerm_MU *y,cTer
    which_alu=cConfig::GetMuOpcodeDef(oc)->alu;
    // Check if opcode parameters are valid
    if(!isMuParmValid(oc,cConfig::GetMuOpcodeDef(oc)->x1_type,x1))
-      error(m_node->m_lineNo,"Invalid parameter");
+      error(m_node->m_lineNo,"Invalid parameter x1");
    if(!isMuParmValid(oc,cConfig::GetMuOpcodeDef(oc)->x2_type,x2))
-      error(m_node->m_lineNo,"Invalid parameter");
+      error(m_node->m_lineNo,"Invalid parameter x2");
    if(which_alu==cConfig::eMuOpcodeDefAlu2)
    {
-      m_alu2.oc=oc; 
+      m_alu2.oc=oc;
       m_alu2.which_alu=which_alu;
       m_alu2.x1=x1;
       m_alu2.x2=x2;
@@ -254,13 +254,15 @@ RETCODE cInstruction::createMU(int oc,cTerm_MU *x1,cTerm_MU *x2,cTerm_MU *y,cTer
    }
    else
    {
-      m_alu1.oc=oc; 
+      m_alu1.oc=oc;
       m_alu1.which_alu=which_alu;
       m_alu1.x1=x1;
       m_alu1.x2=x2;
       m_alu1.y=y;
       m_alu1.xacc=xacc;
    }
+   if(oc == 23)
+      printf("encoded x2->m_c=%f\n", x2->getConstant());
    return OK;
 }
 
@@ -551,7 +553,7 @@ bool cInstruction::simplifyMU(Instruction_alu *_mu)
 {
    bool rc=false;
    int result;
-   if(_mu->oc > 0 && 
+   if(_mu->oc > 0 &&
       _mu->x1->isKindOf(cTerm_MU_Constant::getCLID()) &&
       _mu->x2->isKindOf(cTerm_MU_Constant::getCLID()))
    {
@@ -638,6 +640,21 @@ bool cInstruction::simplifyMU(Instruction_alu *_mu)
       case cConfig::OPCODE_ASSIGN_RAW:
          assert(0);
          break;
+      case cConfig::OPCODE_DIV:
+         if (_mu->x1->getConstant() && _mu->x2->getConstant()){
+            int x = _mu->x1->getConstant();
+            int encoded = _mu->x2->getConstant();
+            int M = (encoded >> 4) & 0xFF;
+            int n = encoded & 0xFF;
+            assert(n >= 0 && n <= 15);
+            result = (x * M) >> n;
+            _mu->x1 = new cTerm_MU_Constant(result);
+            _mu->x2 = new cTerm_MU_Null();
+            _mu->xacc = new cTerm_MU_Null();
+            _mu->oc = cConfig::OPCODE_ASSIGN_RAW;
+            rc = true;
+         }
+         break;
       case cConfig::OPCODE_FMA:
       case cConfig::OPCODE_FMS:
       case cConfig::OPCODE_FNMA:
@@ -683,7 +700,7 @@ bool cInstruction::simplifyMU(Instruction_alu *_mu)
       _mu->x1->getConstant()==0 &&
       *_mu->y==*_mu->x2)
    {
-      // Add variables with zero has no effect. 
+      // Add variables with zero has no effect.
       // Turn this instruction into a NOP
       _mu->oc=-1;
       rc=true;
@@ -693,7 +710,7 @@ bool cInstruction::simplifyMU(Instruction_alu *_mu)
       _mu->x2->getConstant()==0 &&
       *_mu->y==*_mu->x1)
    {
-      // Add variables with zero has no effect. 
+      // Add variables with zero has no effect.
       // Turn this instruction into a NOP
       _mu->oc=-1;
       rc=true;
@@ -722,7 +739,7 @@ bool cInstruction::resolveConstantConflict(cInstruction *begin)
    cInstruction *end;
 
    end=GetFunctionEnd(begin);
-   
+
    func=begin->getBeginFunc();
    node=begin->getBeginFunc()->getChild(1,eTOKEN_block_item_list);
 
@@ -738,7 +755,7 @@ bool cInstruction::resolveConstantConflict(cInstruction *begin)
          cInstruction *instruction2,*beforeInstruction;
          cIdentifier *temp;
          cTerm_MU *term;
-         
+
          beforeInstruction=(cInstruction *)instruction->getPrev();
          instruction2 = new cInstruction(node);
          cList::remove(instruction);
@@ -768,7 +785,7 @@ cInstruction *cInstruction::getBranch()
       return 0;
    switch(m_control.oc)
    {
-      case cConfig::OPCODE_RETURN: 
+      case cConfig::OPCODE_RETURN:
          return 0;
       case cConfig::OPCODE_JUMP_LT:
       case cConfig::OPCODE_JUMP_LE:
@@ -792,10 +809,10 @@ int cInstruction::reverseLogic(int oc)
       return oc;
    switch(oc)
    {
-      case cConfig::OPCODE_RETURN: 
+      case cConfig::OPCODE_RETURN:
          return cConfig::OPCODE_RETURN;
       case cConfig::OPCODE_JUMP_LT:
-         return cConfig::OPCODE_JUMP_GE; 
+         return cConfig::OPCODE_JUMP_GE;
       case cConfig::OPCODE_JUMP_LE:
          return cConfig::OPCODE_JUMP_GT;
       case cConfig::OPCODE_JUMP_GT:
@@ -1071,7 +1088,7 @@ cInstruction *cInstruction::getInstructionBlock(cInstruction *begin,cInstruction
       if(branch && endBlock->m_seq < branch->m_seq)
          endBlock=branch;
       for(instruction2=begin;instruction2;instruction2=(instruction2==end)?0:(cInstruction *)instruction2->getNext())
-      {  
+      {
          if(instruction2->m_seq >= curr->m_seq && instruction2->m_seq <= endBlock->m_seq)
             continue;
          branch=instruction2->getBranch();
@@ -1130,7 +1147,7 @@ bool cInstruction::getConstantAssignment(cTerm **_y,cTerm **_c)
          }
          else
             return false;
-      } 
+      }
       else if(m_imu.x1->isKindOf(cTerm_IMU_Zero::getCLID()))
       {
          if(m_imu.x2->isKindOf(cTerm_IMU_Constant::getCLID()) &&
@@ -1248,7 +1265,7 @@ bool cInstruction::constantFolding(cInstruction *begin,bool _global)
    return (loop > 1);
 }
 
-// Normally integer result from MU are stored in a temporary integer 
+// Normally integer result from MU are stored in a temporary integer
 // Remove result temporary assignment if not necessary
 
 bool cInstruction::substituteAssignment(cInstruction *begin,bool _global)
@@ -1267,19 +1284,19 @@ bool cInstruction::substituteAssignment(cInstruction *begin,bool _global)
    end=GetFunctionEnd(begin);
    for(instruction=begin;instruction;instruction=(instruction==end)?0:(cInstruction *)instruction->getNext())
    {
-      if(instruction->m_imu.oc==cConfig::IOPCODE_ADD && 
+      if(instruction->m_imu.oc==cConfig::IOPCODE_ADD &&
          (
          (
          instruction->m_imu.y->isKindOf(cTerm_IMU_Integer::getCLID()) &&
          instruction->m_imu.x1->isKindOf(cTerm_IMU_Result::getCLID()) &&
          instruction->m_imu.x2->isKindOf(cTerm_IMU_Zero::getCLID())
-         ) 
+         )
          ||
          (
          instruction->m_imu.y->isKindOf(cTerm_IMU_Integer::getCLID()) &&
          instruction->m_imu.x2->isKindOf(cTerm_IMU_Result::getCLID()) &&
          instruction->m_imu.x1->isKindOf(cTerm_IMU_Zero::getCLID())
-         ) 
+         )
          )
          &&
          instruction->m_control.oc <= 0)
@@ -1438,7 +1455,7 @@ bool cInstruction::substituteAssignment(cInstruction *begin,bool _global)
                         instruction3->m_alu1.x2=new cTerm_MU_Storage(CAST(cIdentifierStorage,id2),id2_offset);
                         rc=true;
                      }
-                     if(instruction3->m_alu1.oc==cConfig::OPCODE_ASSIGN && 
+                     if(instruction3->m_alu1.oc==cConfig::OPCODE_ASSIGN &&
                         instruction3->m_alu1.x1->isKindOf(cTerm_MU_Storage::getCLID()) &&
                         instruction3->m_alu1.y->isKindOf(cTerm_MU_Storage::getCLID()) &&
                         CAST(cTerm_MU_Storage,instruction3->m_alu1.x1)->m_id==CAST(cTerm_MU_Storage,instruction3->m_alu1.y)->m_id &&
@@ -1467,7 +1484,7 @@ bool cInstruction::substituteAssignment(cInstruction *begin,bool _global)
                         instruction3->m_alu1.x2=instruction->m_alu1.x2;
                         instruction3->m_alu1.xacc=instruction->m_alu1.xacc;
                         rc=true;
-                        if(instruction3->m_alu1.oc==cConfig::OPCODE_ASSIGN && 
+                        if(instruction3->m_alu1.oc==cConfig::OPCODE_ASSIGN &&
                            instruction3->m_alu1.x1->isKindOf(cTerm_MU_Storage::getCLID()) &&
                            instruction3->m_alu1.y->isKindOf(cTerm_MU_Storage::getCLID()) &&
                            CAST(cTerm_MU_Storage,instruction3->m_alu1.x1)->m_id==CAST(cTerm_MU_Storage,instruction3->m_alu1.y)->m_id &&
@@ -1527,7 +1544,7 @@ bool cInstruction::compress_vmask(cInstruction *begin)
    {
       if(instruction->m_jumpDestination)
          continue;
-      if(instruction->m_alu1.oc < 0 && instruction->m_alu2.oc < 0 && instruction->m_control.oc < 0 && 
+      if(instruction->m_alu1.oc < 0 && instruction->m_alu2.oc < 0 && instruction->m_control.oc < 0 &&
          instruction->m_imu.oc >= 0 && instruction->m_imu.y->isKindOf(cTerm_IMU_Lane::getCLID()))
       {
          // This is the VMASK update. Can combine with next instruction is next instruction is a pure MU instruction
@@ -1547,8 +1564,8 @@ bool cInstruction::compress_vmask(cInstruction *begin)
                break;
             if(instruction2->m_imu.oc >= 0 && instruction2->m_imu.y->isKindOf(cTerm_IMU_Lane::getCLID()))
                break;
-         
-            if(instruction2->m_alu1.oc >= 0 && instruction2->m_imu.oc < 0 && 
+
+            if(instruction2->m_alu1.oc >= 0 && instruction2->m_imu.oc < 0 &&
                instruction2->m_control.oc < 0 )
             {
                instruction2->m_imu=instruction->m_imu;
@@ -1808,7 +1825,7 @@ bool cInstruction::compress_jump(cInstruction *begin)
       instruction=(cInstruction *)instruction->getNext();
    }
 
-   // Determine correct jump destination 
+   // Determine correct jump destination
    instruction=begin;
    while(instruction)
    {
@@ -1862,7 +1879,7 @@ bool cInstruction::compress_jump(cInstruction *begin)
             break;
          nextnext=(cInstruction *)nextnext->getNext();
       }
-      if(branch && 
+      if(branch &&
          branch==nextnext && next && next->m_control.oc==cConfig::OPCODE_JUMP)
       {
          instruction->m_control.oc=cInstruction::reverseLogic(instruction->m_control.oc);
@@ -1893,7 +1910,7 @@ bool cInstruction::compress_jump(cInstruction *begin)
    return rc;
 }
 
-// Check if in a instruction execution, X parameters are dependent on a result Y of 
+// Check if in a instruction execution, X parameters are dependent on a result Y of
 // a previous instruction
 bool cInstruction::check_independent(cTerm *y,cTerm *x)
 {
@@ -1918,7 +1935,7 @@ bool cInstruction::can_fit(cInstruction *instruction1,cInstruction *instruction2
 
 // Check for independent when trying to combining 2 instructions
 // Check if opcode with x1,x2,y terms can be combined to instruction to
-// Return 
+// Return
 //   -1 :FAIL
 //   -2 :FAIL but continue
 //   +0 :DONE
@@ -1940,7 +1957,7 @@ int cInstruction::combine(
        cConfig::GetMuOpcodeDef(oc)->group >= 0 &&
        cConfig::GetMuOpcodeDef(oc)->group == cConfig::GetMuOpcodeDef(to->m_alu1.oc)->group)
        return RC_FAIL;
- 
+
    // Check for constant slot availability
 
    if(to->m_jumpDestination)
@@ -1979,29 +1996,29 @@ int cInstruction::combine(
       last=true; // Can't move because x2 has to be after y result
    if(!check_independent(y,to->m_alu1.xacc))
       last=true; // Can't move because xacc has to be after y result
-   if(!check_independent(y,to->m_alu1.y)) 
+   if(!check_independent(y,to->m_alu1.y))
    {
       if(type==INSTRUCTION_TYPE_IMU)
          last=true; // this is the last chance to combine
       else
          return RC_FAIL;
    }
-   if(!check_independent(y,to->m_alu2.x1)) 
+   if(!check_independent(y,to->m_alu2.x1))
       last=true; // this is the last chance to combine
-   if(!check_independent(y,to->m_alu2.x2)) 
+   if(!check_independent(y,to->m_alu2.x2))
       last=true; // this is the last chance to combine
-   if(!check_independent(y,to->m_alu2.xacc)) 
+   if(!check_independent(y,to->m_alu2.xacc))
       last=true; // this is the last chance to combine
-   if(!check_independent(y,to->m_alu2.y)) 
+   if(!check_independent(y,to->m_alu2.y))
    {
       if(type==INSTRUCTION_TYPE_IMU)
          last=true; // this is the last chance to combine
       else
          return RC_FAIL;
    }
-   if(!check_independent(y,to->m_imu.x1)) 
+   if(!check_independent(y,to->m_imu.x1))
       last=true; // this is the last chance to combine
-   if(!check_independent(y,to->m_imu.x2)) 
+   if(!check_independent(y,to->m_imu.x2))
       last=true; // this is the last chance to combine
    if(!check_independent(y,to->m_imu.y))
       return RC_FAIL;
@@ -2422,7 +2439,7 @@ bool cInstruction::fm_int(cInstruction *begin)
                   else
                   {
                      instruction->m_alu1.oc=cConfig::OPCODE_FNMS;
-                  }   
+                  }
                   instruction->m_alu1.xacc=instruction2->m_alu1.x2;
                   instruction2->m_alu1.x2=0;
                   instruction->m_alu1.y=instruction2->m_alu1.y;
@@ -2470,7 +2487,7 @@ bool cInstruction::fm_post(cInstruction *begin)
    // Remove all instructions _A=_A;
    for (instruction = begin; instruction; instruction = (instruction == end) ? 0 : (cInstruction *)instruction->getNext())
    {
-      if (instruction->m_alu1.oc == cConfig::OPCODE_ASSIGN && 
+      if (instruction->m_alu1.oc == cConfig::OPCODE_ASSIGN &&
          instruction->m_alu1.y->isDouble() && instruction->m_alu1.x1->isDouble() &&
          (CAST(cTerm_MU_Storage,instruction->m_alu1.y)->m_id==CAST(cTerm_MU_Storage,instruction->m_alu1.x1)->m_id))
       {
@@ -2501,7 +2518,7 @@ bool cInstruction::fm_post(cInstruction *begin)
          xacc=x2;
       }
       else
-         continue;      
+         continue;
       if(x && x->isDouble())
          error(instruction->getBeginFunc()->m_lineNo,"Invalid operations involved double");
       if (instruction->m_alu1.oc == cConfig::OPCODE_ASSIGN)
@@ -2537,14 +2554,14 @@ bool cInstruction::fm_post(cInstruction *begin)
             instruction->m_alu1.oc=cConfig::OPCODE_FNMA;
             instruction->m_alu1.x1=x;
             instruction->m_alu1.x2=new cTerm_MU_Constant((int)1);
-            instruction->m_alu1.xacc=xacc;   
+            instruction->m_alu1.xacc=xacc;
          }
          else
          {
             // y=x-_A;
             instruction->m_alu1.oc=cConfig::OPCODE_FMS;
             instruction->m_alu1.x1=x;
-            instruction->m_alu1.x2=new cTerm_MU_Constant((int)1);   
+            instruction->m_alu1.x2=new cTerm_MU_Constant((int)1);
             instruction->m_alu1.xacc=xacc;
          }
       }
@@ -2553,16 +2570,16 @@ bool cInstruction::fm_post(cInstruction *begin)
          // Nothing to do...
       }
       else
-         error(instruction->getBeginFunc()->m_lineNo,"Invalid operations involved double");                        
+         error(instruction->getBeginFunc()->m_lineNo,"Invalid operations involved double");
    }
    return true;
 }
 
-// Perform various instruction optimization 
+// Perform various instruction optimization
 int cInstruction::Optimize(cAstNode *_root)
 {
    bool cont;
-   cInstruction *begin;  
+   cInstruction *begin;
    cInstruction *instruction;
    begin=(cInstruction *)PROGRAM.getFirst();
 
@@ -2680,8 +2697,8 @@ void cInstruction::genHex(FILE *fp,short addr,unsigned char *opcode)
    pp=opcode;
    checkSum += pp[0];
    checkSum += pp[1];
-   checkSum += pp[2]; 
-   checkSum += pp[3]; 
+   checkSum += pp[2];
+   checkSum += pp[3];
    checkSum = ~checkSum;
    checkSum = checkSum+1;
    fprintf(fp,":03%04X00%02X%02X%02X%02X%02X\n",(int)addr,(int)opcode[0],(int)opcode[1],(int)opcode[2],(int)opcode[3],(int)checkSum);
@@ -2802,7 +2819,7 @@ int cInstruction::gen(FILE *fp,std::vector<uint8_t> &img)
 
       instruction=(cInstruction *)instruction->getNext();
 	}
-	fprintf(fp,":00000001FF\n"); 
+	fprintf(fp,":00000001FF\n");
    return OK;
 }
 
