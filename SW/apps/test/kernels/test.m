@@ -21,7 +21,7 @@
 #include "../../../../SW/src/soc.h"
 #include "test.p.img"
 
-#define BUFSZ (16*8*NUM_PCORE*2)
+#define BUFSZ (NUM_PCORE*2)
 
 static volatile uint16_t inbuf[BUFSZ];
 static volatile uint16_t outbuf[BUFSZ];
@@ -51,7 +51,7 @@ static void test(void *_p,int pid) {
 
    >DTYPE(INT16)PCORE(NUM_PCORE)[0:NUM_PCORE-1].THREAD[0:15].test::_A[0:7] <= DTYPE(INT16)MEM(req->in_p)[from:to];
 
-   >EXE_LOCKSTEP(test::add,NUM_PCORE);
+   >EXE_LOCKSTEP(test::div,NUM_PCORE);
 
    ztaTaskYield();
 
@@ -75,7 +75,7 @@ void kernel_test_exe() {
    req.len = BUFSZ;
    
    for(i=0;i < req.len;i++)
-      inbuf[i]=(i&0xFF);
+      inbuf[i]=0x08;
 
    FLUSH_DATA_CACHE();
 
@@ -90,7 +90,7 @@ void kernel_test_exe() {
    }   
 
    for(i=0;i < req.len;i++) {
-      if(outbuf[i] != ((i&0xFF)+1)) {
+      if(outbuf[i] != 0x04){
          for(;;) {
             APB[0]=0xffffffff;
          }
