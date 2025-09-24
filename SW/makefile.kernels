@@ -11,7 +11,7 @@ SRCS = \
 	apps/nn/kernels/fcn.m \
 	apps/nn/kernels/objdet.m \
 	apps/llm/kernels/llm.m \
-	apps/test/kernels/test.m
+	apps/fpga_test/kernels/test.m
 
 KOBJS := $(SRCS)
 KOBJS := $(KOBJS:.m=.m.c)

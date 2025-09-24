@@ -95,7 +95,8 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
             return NeuralNetOperatorUnknown;
          }
       default:
-         return NeuralNetOperatorUnknown; 
+         printf("Unknown opcode: %ld\n", GetBuiltinCode(opcode));
+         return NeuralNetOperatorUnknown;
    }
 }
 

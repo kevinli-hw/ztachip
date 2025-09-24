@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+//#include <sys/time.h>
 #include "soc.h"
 #include "../base/zta.h"
 #include "../base/util.h"
@@ -38,6 +39,7 @@
 #include "../apps/gaussian/gaussian.h"
 #include "../apps/equalize/equalize.h"
 #include "../apps/nn/tf.h"
+#include "../apps/fpga_test/test.h"
 
 // This is the test suite for ztachip
 // Various vision and AI functions are tested and verified against test vectors
@@ -686,6 +688,8 @@ int test_yuyv_to_bgr() {
 
 int test_canny()
 {
+
+   printf("canny test begins.\n");
    char fname[200];
    FILE *fp;
    int w,h;
@@ -713,6 +717,7 @@ int test_canny()
       assert(fp);
 
       std::vector<int> input_dim={1,src_w,src_h};
+      printf("input dim:(1, %d, %d)\n", src_w, src_h);
       inputTensor.Create(TensorDataTypeUint8,TensorFormatSplit,TensorObjTypeMonochromeSingleChannel,input_dim);
       input=(uint8_t *)inputTensor.GetBuf();
 
@@ -1028,6 +1033,8 @@ int test_histogram()
 
 void test_mobinet()
 {
+
+   printf("mobilenet test start.\n");
    TENSOR input;
    TENSOR output;
    Graph graph;
@@ -1060,7 +1067,7 @@ void test_mobinet()
    NeuralNet::GetTop5(probability,output.GetBufLen(),top5);
    for(int i=0;i < 5;i++)
    {
-//      printf("   %d %f\n",top5[i],(float)probability[top5[i]]/255.0);
+      printf("label: %d probability: %f\n",top5[i],(float)probability[top5[i]]/255.0);
    }
    fclose(fp);
    free(p);
@@ -1129,7 +1136,7 @@ void test_mobinet_ssd()
    free(p);
 
 #if 0
-   { 
+   {
    float *box_p;
    float *classes_p;
    float *probability_p;
@@ -1160,20 +1167,146 @@ void test_mobinet_ssd()
    TF1.Unload();
 }
 
+int test_vector_div(){
+   uint16_t *input;
+   uint16_t *output;
+   GraphNodeTest graphNode;
+   TENSOR inputTensor;
+   TENSOR outputTensor;
+   ZtaStatus rc;
+   Graph graph;
+   int src_w, src_h, src_c;
+   src_h = 2;
+   src_w = 256;
+   src_c = 1;
+//   int m_w, m_h, m_nChannel;
+
+   std::vector<int> input_dim={src_c,src_h,src_w};
+   inputTensor.Create(TensorDataTypeUint16,TensorFormatSplit,TensorObjTypeMonochromeSingleChannel,input_dim);
+//   m_w=(*(inputTensor.GetDimension()))[2];
+//   m_h=(*(inputTensor.GetDimension()))[1];
+//   m_nChannel=(*(inputTensor.GetDimension()))[0];
+//   printf("input dim(w,h,c): %d, %d, %d\n", m_w, m_h, m_nChannel);
+
+   input=(uint16_t *)inputTensor.GetBuf();
+   memset(input,0,src_w*src_h*src_c);
+   for(int i = 0; i < src_c; i++)
+   {
+     for(int j = 0; j < src_h; j++)
+     {
+       for(int k = 0; k < src_w; k++)
+       {
+         if (j==0)
+           input[k+j*src_w+i*src_h*src_w]=10;
+         else
+           input[k+j*src_w+i*src_h*src_w]=12;
+       }
+     }
+   }
+
+   rc=graphNode.Create(&inputTensor, &outputTensor);
+   assert(rc==ZtaStatusOk);
+
+   graph.Clear();
+   graph.Add(&graphNode);
+   rc=graph.Verify();
+   assert(rc==ZtaStatusOk);
+   FLUSH_DATA_CACHE();
+   graph.Prepare();
+   graph.RunUntilCompletion();
+   FLUSH_DATA_CACHE();
+
+   output=(uint16_t *)outputTensor.GetBuf();
+
+   printf("output [0][0][0-4] is: ");
+   for (int i = 0; i < 5; i++) {
+       printf("%u ", output[i]);
+   }
+   printf("\n");
+
+   printf("output [0][1][0-4] is: ");
+   for (int i = 0; i < 5; i++) {
+       printf("%u ", output[i+src_w]);
+   }
+   printf("\n");
+
+
+   return 0;
+}
+
+int test_model(){
+   printf("resnet50 test start.\n");
+   TENSOR input;
+   TENSOR output;
+   Graph graph;
+   ZtaStatus rc;
+   TfliteNn TF2;
+
+   rc=input.CreateWithBitmap("classifier_input.bmp");
+   assert(rc==ZtaStatusOk);
+   TF2.Create("resnet50_int8.tflite",&input,1,&output);
+   graph.Add(&TF2);
+   graph.Verify();
+
+   FLUSH_DATA_CACHE();
+   graph.Prepare();
+   graph.RunUntilCompletion();
+   FLUSH_DATA_CACHE();
+   {
+   //size_t size=output.GetBufLen();
+   //uint8_t *p=(uint8_t *)malloc(size);
+   //FILE *fp=fopen("classifier.bin","rb");
+   //assert(fp);
+   //if(fread(p,1,size,fp) != size) {
+   //   assert(0);
+   //}
+   //if(memcmp(p,output.GetBuf(),size) != 0) {
+   //   assert(0);
+   //}
+   int top5[5];
+   uint8_t *probability=(uint8_t *)output.GetBuf();
+   NeuralNet::GetTop5(probability,output.GetBufLen(),top5);
+   for(int i=0;i < 5;i++)
+   {
+      printf("label: %d probability: %f\n",top5[i],(float)probability[top5[i]]/255.0);
+   }
+   //fclose(fp);
+   //free(p);
+   }
+
+   TF2.Unload();
+   return 0;
+}
+
 // ztachip test suite...
 
 int test()
 {
-   test_mobinet_ssd();
-   test_mobinet();
-   test_histogram();
-   test_gaussian();
-   test_resize();
-   test_harris();
-   test_canny();
-   test_yuyv_to_bgr();
-   test_of();
-   test_color();
+//   struct timeval start, end;
+//   long seconds, useconds;
+//   double duration;
+   printf("unit test start.\n");
+   //test_mobinet_ssd();
+//   gettimeofday(&start, NULL);
+//
+//   test_mobinet();
+//   test_vector_div();
+     test_model();
+//   gettimeofday(&end, NULL);
+//   seconds  = end.tv_sec  - start.tv_sec;
+//   useconds = end.tv_usec - start.tv_usec;
+//   duration = seconds + useconds/1000000.0;
+//
+//   printf("execution duration: %.6f s\n", duration);
+   //test_histogram();
+   //test_gaussian();
+   //test_resize();
+   //test_harris();
+   //test_canny();
+   //test_yuyv_to_bgr();
+   //test_of();
+   //test_color();
+   printf("unit test end.\n");
    return 0;
 }
 

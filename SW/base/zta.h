@@ -24,6 +24,8 @@
 #define _ZTA_H_
 
 #include "config.h"
+//#define NUM_PCORE 8  // large version
+#define NUM_PCORE 4  // small version
 
 #define MEM_MAP  0x80000000 // ztachip address as mapped on AXI bus.
 
@@ -157,7 +159,7 @@
 
 #define MCORE_INSTRUCTION_SIZE  (1<<MCORE_INSTRUCTION_DEPTH);
 
-// Shared mode: 
+// Shared mode:
 // 0=2 register per thread assigned for shared space
 // 1=4 registers per thread assigned for shared space
 // 2=8 registers per thread assigned for shared space
@@ -232,7 +234,7 @@
 
 // DP address bus width. Wide enough to address largest allowed tensors
 
-#define DP_ADDR_WIDTH  MAX_TENSOR_LOG2_SIZE 
+#define DP_ADDR_WIDTH  MAX_TENSOR_LOG2_SIZE
 
 // TENSOR core instructions
 
@@ -416,7 +418,7 @@
 
 #define DP_OPCODE_PRINT  7
 
-#define DP_OPCODE_FPU_EXE 5 
+#define DP_OPCODE_FPU_EXE 5
 
 // Condition associated with REG_DP_RUN command
 

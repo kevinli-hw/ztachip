@@ -25,8 +25,8 @@ LLM_TEST=no
 DEBUG=no
 BENCH=no
 MULDIV=yes
-
 MAIN = src/main.cpp
+UNIT_TEST?=yes
 
 SRCS = 	base/newlib.c \
 	base/ztalib.c \
@@ -40,6 +40,8 @@ SRCS = 	base/newlib.c \
 	src/vision_ai.cpp \
 	src/mpy.cpp \
 	apps/main/kernels/main.m.c \
+	apps/fpga_test/kernels/test.m.c \
+	apps/fpga_test/test.cpp \
 	apps/color/kernels/color.m.c \
 	apps/color/color.cpp \
 	apps/of/kernels/of.m.c \
