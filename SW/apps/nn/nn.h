@@ -79,6 +79,7 @@ typedef enum {
    NeuralNetOperatorAdd,
    NeuralNetOperatorAvgPool2D,
    NeuralNetOperatorUnknown,
+   NeuralNetOperatorFC,
    NeuralNetOperatorMax
 } NeuralNetOperator;
 
@@ -199,7 +200,7 @@ struct NeuralNetOperatorDef {
          int32_t activation_min;
          int32_t activation_max;
       } pool_avg;
-   } u; 
+   } u;
 };
 
 class NeuralNet;
@@ -256,7 +257,7 @@ public:
    std::vector<NeuralNetLayer *> m_operators;
 public:
    // Some utilities
-   inline float dequantize(uint8_t x,int32_t zero,float scale) { 
+   inline float dequantize(uint8_t x,int32_t zero,float scale) {
       return ((static_cast<float>(x) - zero) * scale);
    }
 private:

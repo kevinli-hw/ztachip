@@ -88,6 +88,8 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
          return NeuralNetOperatorLogistic;
       case BuiltinOperator_RESHAPE:
          return NeuralNetOperatorReshape;
+      case BuiltinOperator_FULLY_CONNECTED:
+         return NeuralNetOperatorFC;
       case BuiltinOperator_CUSTOM:
          if(strcmp(opcode->custom_code()->c_str(),"TFLite_Detection_PostProcess")==0)
             return NeuralNetOperatorDetection;

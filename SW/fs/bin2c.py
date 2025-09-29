@@ -126,6 +126,12 @@ write_c_array("mobilenet_v2_1_0_224_quant", raw_data)
 raw_data = read_file("resnet50_int8.tflite")
 write_c_array("resnet50_int8", raw_data)
 
+raw_data = read_file("conv7x7_fc120_int8.tflite")
+write_c_array("conv7x7_fc120_int8", raw_data)
+
+raw_data = read_file("conv7x7_conv_int8.tflite")
+write_c_array("conv7x7_conv_int8", raw_data)
+
 raw_data = read_file("classifier.bin")
 write_c_array("classifier", raw_data)
 

@@ -1235,16 +1235,21 @@ int test_vector_div(){
 }
 
 int test_model(){
-   printf("resnet50 test start.\n");
+   printf("model test start.\n");
    TENSOR input;
    TENSOR output;
    Graph graph;
    ZtaStatus rc;
    TfliteNn TF2;
+   int8_t* result;
 
-   rc=input.CreateWithBitmap("classifier_input.bmp");
+   std::vector<int> input_dim={3,7,7};
+   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+
+   //rc=input.CreateWithBitmap("classifier_input.bmp");
    assert(rc==ZtaStatusOk);
-   TF2.Create("resnet50_int8.tflite",&input,1,&output);
+   //TF2.Create("resnet50_int8.tflite",&input,1,&output);
+   TF2.Create("conv7x7_fc120_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -1263,15 +1268,21 @@ int test_model(){
    //if(memcmp(p,output.GetBuf(),size) != 0) {
    //   assert(0);
    //}
-   int top5[5];
-   uint8_t *probability=(uint8_t *)output.GetBuf();
-   NeuralNet::GetTop5(probability,output.GetBufLen(),top5);
-   for(int i=0;i < 5;i++)
-   {
-      printf("label: %d probability: %f\n",top5[i],(float)probability[top5[i]]/255.0);
-   }
+   //int top5[5];
+   //uint8_t *probability=(uint8_t *)output.GetBuf();
+   //NeuralNet::GetTop5(probability,output.GetBufLen(),top5);
+   //for(int i=0;i < 5;i++)
+   //{
+   //   printf("label: %d probability: %f\n",top5[i],(float)probability[top5[i]]/255.0);
+   //}
    //fclose(fp);
    //free(p);
+   result = (int8_t*)output.GetBuf();
+   for (int i=0; i<5; i++)
+   {
+      printf("%d ", result[i]);
+   }
+   printf("\n");
    }
 
    TF2.Unload();

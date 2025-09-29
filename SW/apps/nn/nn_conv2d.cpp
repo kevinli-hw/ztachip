@@ -95,8 +95,9 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
       // Output flat format only
       out_fmt=kTensorFormatFlat;
    } else {
+      printf("op_index: %d, op_output_shape: %d\n", op->index, op->output.size());
       assert(0); // ?????
-   } 
+   }
 
    if(op->op==NeuralNetOperatorConv2D) {
       if(((*op->input_shape[0])[1]==1)?true:false) {
@@ -341,7 +342,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenConvolutionWeight(uint8_t *_coef,std::ve
          }
       }
    }
-   // Transpose the coefficient tensor... 
+   // Transpose the coefficient tensor...
    for (int r1 = 0; r1 < h; r1++) {
       for (int c1 = 0; c1 < w; c1++) {
          memcpy(out+c1*h*VECTOR_WIDTH+r1*VECTOR_WIDTH,t+r1*w*VECTOR_WIDTH+c1*VECTOR_WIDTH,VECTOR_WIDTH);
@@ -439,7 +440,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
    for (int r1 = 0; r1 < h; r1++) {
       for (int c1 = 0; c1 < w; c1++) {
          memcpy(temp3+c1*h*IP_CHUNK_SIZE+r1*IP_CHUNK_SIZE,
-               _gen_coef+r1*w*IP_CHUNK_SIZE+c1*IP_CHUNK_SIZE, 
+               _gen_coef+r1*w*IP_CHUNK_SIZE+c1*IP_CHUNK_SIZE,
                IP_CHUNK_SIZE);
       }
    }

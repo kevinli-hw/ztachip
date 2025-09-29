@@ -74,6 +74,8 @@
 #include "../fs/gen/detect.c"
 #include "../fs/gen/labelmap.c"
 #include "../fs/gen/resnet50_int8.c"
+#include "../fs/gen/conv7x7_fc120_int8.c"
+#include "../fs/gen/conv7x7_conv_int8.c"
 #endif
 #include "../thirdparty/FatFs/ff.h"
 
@@ -181,6 +183,16 @@ int _open(const char *name, int flags, int mode) {
 	    files[i].curr=0;
       files[i].len=sizeof(resnet50_int8);
       files[i].body=resnet50_int8;
+   } else if(strcmp(name,"conv7x7_fc120_int8.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(conv7x7_fc120_int8);
+      files[i].body=conv7x7_fc120_int8;
+   } else if(strcmp(name,"conv7x7_conv_int8.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(conv7x7_conv_int8);
+      files[i].body=conv7x7_conv_int8;
    } else if(strcmp(name,"labels_mobilenet_quant_v1_224.txt")==0) {
       files[i].status=true;
       files[i].curr=0;
