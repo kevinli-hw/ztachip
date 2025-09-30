@@ -1303,7 +1303,7 @@ int test_model(){
 
 // ztachip test suite...
 int test()
-//{
+{
 //   struct timeval start, end;
 //   long seconds, useconds;
 //   double duration;

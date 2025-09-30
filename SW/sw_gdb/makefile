@@ -1,7 +1,7 @@
 # Makefile (flat obj dir)
-TARGET  := test_model_exec
-CXX     := g++
-CC      := gcc
+TARGET_NAME  	:= test_model_exec
+CXX     			:= g++
+CC      			:= gcc
 
 OBJDIR  := build
 
@@ -10,7 +10,7 @@ CXXFLAGS  := -g -fpermissive $(INCLUDES) -MMD -MP
 CFLAGS    := -g $(INCLUDES) -MMD -MP
 
 C_SRCS := \
-  ./mini_newlib.c \
+  mini_newlib.c \
   ../base/ztalib.c \
   ../base/util.c \
 	../fs/gen/conv7x7_fc120_int8.c \
@@ -35,6 +35,8 @@ CXX_SRCS := \
   ../apps/nn/tf.cpp \
   ../apps/nn/tf_util.cpp
 
+TARGET 	 := $(OBJDIR)/$(TARGET_NAME) 
+
 C_OBJS   := $(addprefix $(OBJDIR)/,$(notdir $(C_SRCS:.c=.o)))
 CXX_OBJS := $(addprefix $(OBJDIR)/,$(notdir $(CXX_SRCS:.cpp=.o)))
 OBJS     := $(C_OBJS) $(CXX_OBJS)
@@ -44,7 +46,7 @@ VPATH := . ../base ../apps/nn ../apps/nn/.. ../fs/gen
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) | $(OBJDIR)
 	$(CXX) $(OBJS) -o $@
 
 $(OBJDIR):
