@@ -1242,9 +1242,21 @@ int test_model(){
    ZtaStatus rc;
    TfliteNn TF2;
    int8_t* result;
+   uint8_t *input_buf;
 
    std::vector<int> input_dim={3,7,7};
    rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+
+   input_buf=(uint8_t *)input.GetBuf();
+   memset(input_buf,0,3*7*7);
+   for(int i = 0; i < 3; i++)
+   {
+     for(int j = 0; j < 7; j++)
+     {
+       for(int k = 0; k < 7; k++)
+           input_buf[k+j*7+i*7*7]=k+i+j;
+     }
+   }
 
    //rc=input.CreateWithBitmap("classifier_input.bmp");
    assert(rc==ZtaStatusOk);
@@ -1253,11 +1265,11 @@ int test_model(){
    graph.Add(&TF2);
    graph.Verify();
 
-   FLUSH_DATA_CACHE();
-   graph.Prepare();
-   graph.RunUntilCompletion();
-   FLUSH_DATA_CACHE();
-   {
+   //FLUSH_DATA_CACHE();
+   //graph.Prepare();
+   //graph.RunUntilCompletion();
+   //FLUSH_DATA_CACHE();
+   //{
    //size_t size=output.GetBufLen();
    //uint8_t *p=(uint8_t *)malloc(size);
    //FILE *fp=fopen("classifier.bin","rb");
@@ -1277,22 +1289,21 @@ int test_model(){
    //}
    //fclose(fp);
    //free(p);
-   result = (int8_t*)output.GetBuf();
-   for (int i=0; i<5; i++)
-   {
-      printf("%d ", result[i]);
-   }
-   printf("\n");
-   }
+   //result = (int8_t*)output.GetBuf();
+   //for (int i=0; i<5; i++)
+   //{
+   //   printf("%d ", result[i]);
+   //}
+   //printf("\n");
+   //}
 
-   TF2.Unload();
+   //TF2.Unload();
    return 0;
 }
 
 // ztachip test suite...
-
 int test()
-{
+//{
 //   struct timeval start, end;
 //   long seconds, useconds;
 //   double duration;

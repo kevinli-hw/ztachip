@@ -83,6 +83,7 @@ ZtaStatus TfliteNn::Verify() {
    NeuralNet::LoadBegin(m_input,m_output);
 
    m_fp=fopen(m_modelName.c_str(),"rb");
+   printf("model_name: %s\n", m_modelName.c_str());
    assert(m_fp);
    fseek(m_fp, 0L, SEEK_END);
    sz = ftell(m_fp);
