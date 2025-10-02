@@ -136,7 +136,7 @@ ZtaStatus TfliteNn::Verify() {
                def.quantization.m_scale.push_back(tensor->quantization()->scale()->Get(j));
             }
 
-}
+         }
          def.m_buffer=tensor->buffer();
          for(uint32_t j=0;j < (uint32_t)tensor->shape()->size();j++) {
             def.m_shape.push_back(tensor->shape()->Get(j));
@@ -233,15 +233,14 @@ ZtaStatus TfliteNn::Verify() {
                tflite::Padding padding;
                tflite::ActivationFunctionType fused_activation_function;
                int32_t stride_w,stride_h,dilation_w_factor,dilation_h_factor;
-               const tflite::Conv2DOptions* conv_params = op->builtin_options_as_Conv2DOptions();
-               if(!conv_params )
+               const tflite::FullyConnectedOptions fc_params = op->builtin_options_as_FullyConnectedOptions();
+               if (!fc_params)
                  return ZtaStatusFail;
-               stride_w=conv_params->stride_w();
-               stride_h=conv_params->stride_h();
-               dilation_w_factor=conv_params->dilation_w_factor();
-               dilation_h_factor=conv_params->dilation_h_factor();
-               padding=conv_params->padding();
-               fused_activation_function=conv_params->fused_activation_function();
+
+               fused_activation_function=fc_params->fused_activation_function();
+               tflite::FullyConnectedOptionsWeightsFormat weights_format = fc_params->weights_format();
+               bool keep_num_dims = fc_params->keep_num_dims();
+
                TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
                TfliteNnTensorDef &filter=m_tensors[op->inputs()->Get(1)];
                TfliteNnTensorDef &bias=m_tensors[op->inputs()->Get(2)];
