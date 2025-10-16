@@ -48,7 +48,19 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
    int kz=(*op->u.conv.filter_shape)[1];
    int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
    int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
-   if((*op->input_shape[0])[1]==1) {
+   if (op->op == NeuralNetOperatorFC){
+   // This is FCN Layer
+      topcnt=(*op->output_shape[0])[1];
+      topdim=1;
+      botcnt=(*op->input_shape[0])[1];
+      botdim=1+2*op->u.conv.pad_w;
+      printf("topcnt: %d, botcnt: %d\n", topcnt, botcnt);
+      m_shmFilter=GenFcWeight(op->u.conv.filter,topcnt,botcnt,
+                              m_strategy.fcn.coef_dim,
+                              &m_strategy.fcn.nthread,
+                              &m_strategy.fcn.npcore);
+   }
+   else if((*op->input_shape[0])[1]==1) {
       // This is FCN layer
       m_shmFilter=GenFcWeight(op->u.conv.filter,topcnt,botcnt,
                               m_strategy.fcn.coef_dim,
@@ -68,6 +80,7 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
                            CONV_SMALL_BOT_DX,
                            CONV_SMALL_BOT_DY,
                            MAX_CONV_Y_DIM);
+      //printf("CONV layer initiated.\n");
    }
    GenBias((int32_t *)op->u.conv.bias,topcnt,(int32_t)bias,&m_shmBiasHi,&m_shmBiasLo);
 
@@ -99,7 +112,25 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
       assert(0); // ?????
    }
 
-   if(op->op==NeuralNetOperatorConv2D) {
+   if(op->op==NeuralNetOperatorFC){
+         bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
+         kernel_innerProduct_exe(
+            (unsigned int)GetJobId(queue),
+			(unsigned int)m_shmFilter,
+			(unsigned int)m_shmBiasHi,
+			(unsigned int)m_shmBiasLo,
+			(unsigned int)m_nn->BufferGetFlat(op->input[0]),
+			(unsigned int)(outInterleave?m_nn->BufferGetInterleave(op->output[0]):m_nn->BufferGetFlat(op->output[0])),
+            (*op->output_shape[0])[1],
+            (*op->input_shape[0])[1],
+            m_strategy.fcn.coef_dim[0],
+            m_strategy.fcn.coef_dim[1],
+			(unsigned int)m_shmSpu,
+            op->u.conv.output_scale,
+            m_strategy.fcn.npcore,
+            m_strategy.fcn.nthread);
+   }
+   else if(op->op==NeuralNetOperatorConv2D) {
       if(((*op->input_shape[0])[1]==1)?true:false) {
          // Do inner product
          bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
@@ -366,10 +397,12 @@ void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationB
    biasLo_p = m_nn->BufferAllocate(biasLen*sizeof(int16_t));
    biasLo = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasLo_p);
    biasHi = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasHi_p);
+   printf("activation bias: %ld, biasLen: %d \n", activationBias, biasLen);
    for(int i=0;i<biasLen;i++) {
       v=bias[i]-activationBias;
       hi=(int16_t)(v/range);
       lo=(int16_t)(v%range);
+      printf("bias[%d]: %ld, hi: %d, lo: %d\n", i, bias[i], hi, lo);
       biasHi[i]=hi;
       biasLo[i]=lo;
       assert(std::abs(hi) < range);

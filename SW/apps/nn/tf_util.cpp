@@ -199,6 +199,7 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   const int num_channels = filter->quantization.m_scale.size();
   const float input_scale = input->quantization.m_scale[0];
   const float output_scale = output->quantization.m_scale[0];
+  printf("scale num: %d, input scale: %f, output scale %f \n", num_channels, input_scale, output_scale);
   const std::vector<float> &filter_scales = filter->quantization.m_scale;
   if(num_channels != 1) {
      return ZtaStatusFail;
@@ -220,18 +221,30 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   // Populate scalar quantization parameters.
   // This check on legacy quantization parameters is kept only for backward
   // compatibility.
-  if (input->type == NeuralNetTensorType_UINT8) {
-    // Check bias scale == input scale * filter scale.
-    double real_multiplier = 0.0;
-    GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
-    int exponent;
+  //if (input->type == NeuralNetTensorType_UINT8) {
+  //  // Check bias scale == input scale * filter scale.
+  //  double real_multiplier = 0.0;
+  //  GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
+  //  int exponent;
 
-    // Populate quantization parameteters with multiplier and shift.
-    QuantizeMultiplier(real_multiplier, multiplier, &exponent);
-    *shift = -exponent;
-    CalculateActivationRangeUint8(activation, output, output_activation_min,
-                                  output_activation_max);
-  }
+  //  // Populate quantization parameteters with multiplier and shift.
+  //  QuantizeMultiplier(real_multiplier, multiplier, &exponent);
+  //  *shift = -exponent;
+  //  CalculateActivationRangeUint8(activation, output, output_activation_min,
+  //                                output_activation_max);
+  //}
+  double real_multiplier = 0.0;
+  GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
+  int exponent;
+
+  // Populate quantization parameteters with multiplier and shift.
+  QuantizeMultiplier(real_multiplier, multiplier, &exponent);
+  *shift = -exponent;
+  if (input->type == NeuralNetTensorType_UINT8)
+    CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
+  else
+    CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
+
   return ZtaStatusOk;
 }
 

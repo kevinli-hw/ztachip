@@ -83,7 +83,7 @@ ZtaStatus TfliteNn::Verify() {
    NeuralNet::LoadBegin(m_input,m_output);
 
    m_fp=fopen(m_modelName.c_str(),"rb");
-   printf("model_name: %s\n", m_modelName.c_str());
+   //printf("model_name: %s\n", m_modelName.c_str());
    assert(m_fp);
    fseek(m_fp, 0L, SEEK_END);
    sz = ftell(m_fp);
@@ -184,6 +184,7 @@ ZtaStatus TfliteNn::Verify() {
                int height = input.m_shape[1];
                int filter_width = filter.m_shape[2];
                int filter_height = filter.m_shape[1];
+               printf("input width: %d, input height: %d; filter_width: %d, filter height: %d\n", width, height, filter_width, filter_height);
                int out_width,out_height;
                TfliteNnPadding pad;
                pad = ComputePaddingHeightWidth(
@@ -230,10 +231,8 @@ ZtaStatus TfliteNn::Verify() {
                break;
                }
             case NeuralNetOperatorFC: {
-               tflite::Padding padding;
                tflite::ActivationFunctionType fused_activation_function;
-               int32_t stride_w,stride_h,dilation_w_factor,dilation_h_factor;
-               const tflite::FullyConnectedOptions fc_params = op->builtin_options_as_FullyConnectedOptions();
+               const tflite::FullyConnectedOptions *fc_params = op->builtin_options_as_FullyConnectedOptions();
                if (!fc_params)
                  return ZtaStatusFail;
 
@@ -242,35 +241,36 @@ ZtaStatus TfliteNn::Verify() {
                bool keep_num_dims = fc_params->keep_num_dims();
 
                TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
-               TfliteNnTensorDef &filter=m_tensors[op->inputs()->Get(1)];
+               TfliteNnTensorDef &weights=m_tensors[op->inputs()->Get(1)];
                TfliteNnTensorDef &bias=m_tensors[op->inputs()->Get(2)];
                TfliteNnTensorDef &output=m_tensors[op->outputs()->Get(0)];
-               int width = input.m_shape[2];
-               int height = input.m_shape[1];
-               int filter_width = filter.m_shape[2];
-               int filter_height = filter.m_shape[1];
+               //for fc: input is 1xm, weights is nxm, output is 1xn
+               int width = 1;
+               int height = 1;
+               int weights_width = 1;
+               int weights_height = 1;
                int out_width,out_height;
                TfliteNnPadding pad;
                pad = ComputePaddingHeightWidth(
-                                    stride_h,
-                                    stride_w,
-                                    dilation_h_factor,
-                                    dilation_w_factor,
+                                    1, //stride_h
+                                    1, //stride_w
+                                    1, //dilation_h_factor
+                                    1, //dilation_w_factor
                                     height,
                                     width,
-                                    filter_height,
-                                    filter_width,
-                                    padding,
+                                    weights_height,
+                                    weights_width,
+                                    tflite::Padding_SAME, //Padding
                                     &out_height,
                                     &out_width);
                def.u.conv.pad_w=pad.w;
                def.u.conv.pad_h=pad.h;
-               def.u.conv.stride_w=stride_w;
-               def.u.conv.stride_h=stride_h;
-               def.u.conv.dilation_w_factor=dilation_w_factor;
-               def.u.conv.dilation_h_factor=dilation_h_factor;
+               def.u.conv.stride_w=1;
+               def.u.conv.stride_h=1;
+               def.u.conv.dilation_w_factor=1;
+               def.u.conv.dilation_h_factor=1;
                PopulateConvolutionQuantizationParams(
-                     &input,&filter,&bias,&output,
+                     &input,&weights,&bias,&output,
                      ParseActivation(fused_activation_function),
                      &def.u.conv.output_multiplier,
                      &def.u.conv.output_shift,
@@ -279,7 +279,7 @@ ZtaStatus TfliteNn::Verify() {
                      0,0);
                def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
-               def.u.conv.weights_offset = -filter.quantization.m_zeroPoint[0];
+               def.u.conv.weights_offset = -weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
@@ -288,10 +288,11 @@ ZtaStatus TfliteNn::Verify() {
                def.input_type.push_back(input.type);
                def.output_shape.push_back(&output.m_shape);
                def.output_type.push_back(output.type);
-               def.u.conv.filter_shape=&filter.m_shape;
+               def.u.conv.filter_shape=&weights.m_shape;
                def.u.conv.bias_shape=&bias.m_shape;
                def.input.push_back(op->inputs()->Get(0));
                def.output.push_back(op->outputs()->Get(0));
+               printf("input type: %d, output type: %d\n", input.type, output.type);
                break;
             }
             case NeuralNetOperatorConcatenation: {
@@ -468,11 +469,14 @@ ZtaStatus TfliteNn::Verify() {
          }
          if(!(layer=NeuralNet::CreateLayer(i,&def)))
             return ZtaStatusFail;
+         //printf("layer %ld is created, opcode: %ld\n", i, op->opcode_index());
          if(layer->Prepare() != ZtaStatusOk)
             return ZtaStatusFail;
+         //printf("layer %ld is prepared, opcode: %ld\n", i, op->opcode_index());
       }
       NeuralNet::LoadEnd();
    }
+   //printf("Verify ends.\n");
    return ZtaStatusOk;
 }
 

@@ -25,7 +25,7 @@
 #include "../../base/ztalib.h"
 #include "../../src/soc.h"
 #include "flatbuffer/schema_generated.h"
-#include "nn.h" 
+#include "nn.h"
 #include "nn_add.h"
 #include "nn_concat.h"
 #include "nn_conv2d.h"
@@ -35,7 +35,7 @@
 #include "nn_reshape.h"
 
 // Base class to process to process neural network
- 
+
 NeuralNet::NeuralNet() : GraphNode() {
    m_runningStep=-1;
    m_input=0;
@@ -54,6 +54,9 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
          break;
       case NeuralNetOperatorConvDepthWise:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionTypeDepthWise);
+         break;
+      case NeuralNetOperatorFC:
+         layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
          break;
       case NeuralNetOperatorConcatenation:
          layer=new NeuralNetLayerConcat(this,op_);
@@ -95,7 +98,7 @@ ZtaStatus NeuralNet::LoadBegin(TENSOR *input,std::vector<TENSOR *> &_output) {
 ZtaStatus NeuralNet::LoadEnd() {
    // Assign input tensor as input data to the model
    if(AssignInputTensor(true) != ZtaStatusOk)
-      return ZtaStatusFail;   
+      return ZtaStatusFail;
 
    // Prune out all the passthrough layers (reshape)
    for(int i=(int)m_operators.size()-1;i >= 0;i--) {
@@ -161,11 +164,11 @@ ZtaStatus NeuralNet::LoadEnd() {
             if(!BufferFlatPresent(m_operators[i]->m_def.input[0])) {
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),true,false);
-            }            
+            }
             break;
             }
          case LayerIoTypeInInterleaveOutInterleaveAndOrFlat: {
-            // Input must be interleaved   
+            // Input must be interleaved
             if(!BufferInterleavePresent(m_operators[i]->m_def.input[0])) {
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),false,true);
@@ -188,7 +191,7 @@ ZtaStatus NeuralNet::LoadEnd() {
             }
             break;
             }
-         case LayerIoPassthrough: {   
+         case LayerIoPassthrough: {
             // Igore reshape. Just a passthrough
             break;
             }
@@ -277,8 +280,8 @@ ZtaStatus NeuralNet::AssignInputTensor(bool firstTime) {
    // Check input image is correct dimension,type and format
    if(TENSOR::GetTensorSize(*m_operators[0]->m_def.input_shape[0])==TENSOR::GetTensorSize(m_input->m_dim) &&
       (m_input->GetFormat()==TensorFormatSplit) &&
-      ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) || 
-      (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT8 && m_input->GetDataType()==TensorDataTypeInt8) || 
+      ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) ||
+      (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT8 && m_input->GetDataType()==TensorDataTypeInt8) ||
       (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT16 && m_input->GetDataType()==TensorDataTypeInt16))) {
       // Only support the data types above for now...
       BufferAllocate(m_operators[0]->m_def.input[0],m_input);
@@ -374,7 +377,7 @@ ZtaStatus NeuralNet::Verify() {
 ZtaStatus NeuralNet::Execute(int queue,int stepMode)
 {
    ZtaStatus rc;
-   int32_t startTime;
+   int32_t startTime, endTime;
 
    startTime=(int32_t)TimeGet();
    if(m_runningStep < 0) {
@@ -382,6 +385,7 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
       AssignInputTensor(false);
       AssignOutputTensors(false);
    }
+   //printf("stepmode: %d, operator size: %d\n", stepMode, (int)m_operators.size());
    while(m_runningStep < (int)m_operators.size()) {
       if(m_operators[m_runningStep]->RunAtHost()) {
          if(!GraphNode::AllRequestAreCompleted(queue))
@@ -400,6 +404,8 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
    }
    if(m_runningStep >= (int)m_operators.size()) {
       m_runningStep=-1;
+      endTime = (int32_t)TimeGet();
+      printf("current task time: %ld\n", endTime-startTime);
       return ZtaStatusOk; // Scheduling is done
    } else {
       return ZtaStatusPending;
