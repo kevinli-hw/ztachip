@@ -28,7 +28,7 @@ MULDIV=yes
 MAIN = src/main.cpp
 UNIT_TEST?=yes
 
-SRCS = 	base/newlib.c \
+SRCS = 	base/simplelib.c \
 	base/ztalib.c \
 	base/ztalog.c \
 	base/tensor.cpp \
@@ -82,6 +82,8 @@ SRCS = 	base/newlib.c \
 	src/sdmm.c \
 	src/chat.cpp \
 	src/soc.cpp
+	#src/main.cpp
+  base/newlib.c
 
 OBJDIR = build
 

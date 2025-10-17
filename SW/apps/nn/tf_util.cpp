@@ -165,6 +165,7 @@ void TfliteNn::QuantizeMultiplier(double double_multiplier, int32_t* quantized_m
   }
   const double q = frexp(double_multiplier, shift);
   int64_t q_fixed = static_cast<int64_t>(round(q * (1ll << 31)));
+  printf("double_multiplier: %f, q: %f, q_fixed: %ld, shift: %d\n", double_multiplier, q, q_fixed, *shift);
   assert(q_fixed <= (1ll << 31));
   if (q_fixed == (1ll << 31)) {
     q_fixed /= 2;
@@ -201,22 +202,24 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   const float output_scale = output->quantization.m_scale[0];
   printf("scale num: %d, input scale: %f, output scale %f \n", num_channels, input_scale, output_scale);
   const std::vector<float> &filter_scales = filter->quantization.m_scale;
+  // only per-tensor quantization ??
   if(num_channels != 1) {
      return ZtaStatusFail;
   }
-  for (int i = 0; i < num_channels; ++i) {
-    const double filter_scale = static_cast<double>(filter_scales[i]);
-    const double effective_output_scale = static_cast<double>(input_scale) *
-                                          filter_scale /
-                                          static_cast<double>(output_scale);
-    int32_t significand;
-    int shift;
-    QuantizeMultiplier(effective_output_scale, &significand, &shift);
-    if(per_channel_multiplier)
-      per_channel_multiplier[i] = significand;
-    if(per_channel_shift)
-      per_channel_shift[i] = shift;
-  }
+  // per-channel quantization, but no usage
+  //for (int i = 0; i < num_channels; ++i) {
+  //  const double filter_scale = static_cast<double>(filter_scales[i]);
+  //  const double effective_output_scale = static_cast<double>(input_scale) *
+  //                                        filter_scale /
+  //                                        static_cast<double>(output_scale);
+  //  int32_t significand;
+  //  int shift;
+  //  QuantizeMultiplier(effective_output_scale, &significand, &shift);
+  //  if(per_channel_multiplier)
+  //    per_channel_multiplier[i] = significand;
+  //  if(per_channel_shift)
+  //    per_channel_shift[i] = shift;
+  //}
 
   // Populate scalar quantization parameters.
   // This check on legacy quantization parameters is kept only for backward
@@ -240,11 +243,12 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   // Populate quantization parameteters with multiplier and shift.
   QuantizeMultiplier(real_multiplier, multiplier, &exponent);
   *shift = -exponent;
+  printf("input type: %d\n", input->type);
   if (input->type == NeuralNetTensorType_UINT8)
     CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
   else
     CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
-
+  printf("min: %ld, max: %ld\n", *output_activation_min, *output_activation_max);
   return ZtaStatusOk;
 }
 

@@ -276,7 +276,7 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0);
+                     0,0); //per-tensor quantization
                def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = -weights.quantization.m_zeroPoint[0];
