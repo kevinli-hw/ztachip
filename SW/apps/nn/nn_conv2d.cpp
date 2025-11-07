@@ -48,18 +48,14 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
    int kz=(*op->u.conv.filter_shape)[1];
    int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
    int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
-   printf("activation bias: %ld\n", bias);
-   printf("op->u.conv.output_activation_min: %ld\n", op->u.conv.output_activation_min);
-   printf("op->u.conv.output_offset: %ld\n", op->u.conv.output_offset);
-   printf("D: %ld\n",D);
-   printf("op->u.conv.output_multiplier: %ld\n", op->u.conv.output_multiplier);
+   //printf("bias: %lld\n", bias);
+   //printf("D: %lld\n",D);
    if (op->op == NeuralNetOperatorFC){
    // This is FCN Layer
       topcnt=(*op->output_shape[0])[1];
       topdim=1;
       botcnt=(*op->input_shape[0])[1];
       botdim=1+2*op->u.conv.pad_w;
-      printf("topcnt: %d, botcnt: %d\n", topcnt, botcnt);
       m_shmFilter=GenFcWeight(op->u.conv.filter,topcnt,botcnt,
                               m_strategy.fcn.coef_dim,
                               &m_strategy.fcn.nthread,
@@ -87,6 +83,8 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
                            MAX_CONV_Y_DIM);
       //printf("CONV layer initiated.\n");
    }
+
+   //printf("topcnt: %d, botcnt: %d\n", topcnt, botcnt);
    GenBias((int32_t *)op->u.conv.bias,topcnt,(int32_t)bias,&m_shmBiasHi,&m_shmBiasLo);
 
    m_shmSpu=ztaBuildSpuBundle(3,
@@ -402,15 +400,14 @@ void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationB
    biasLo_p = m_nn->BufferAllocate(biasLen*sizeof(int16_t));
    biasLo = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasLo_p);
    biasHi = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasHi_p);
-   printf("activation bias: %ld, biasLen: %d \n", activationBias, biasLen);
    for(int i=0;i<biasLen;i++) {
       v=bias[i]-activationBias;
       hi=(int16_t)(v/range);
       lo=(int16_t)(v%range);
-      printf("bias[%d]: %ld, hi: %d, lo: %d\n", i, bias[i], hi, lo);
+      //printf("bias[%d]: %ld, hi: %d, lo: %d\n", i, bias[i], hi, lo);
       biasHi[i]=hi;
       biasLo[i]=lo;
-      assert(std::abs(hi) < range);
+      assert(std::abs(hi) < range); // ?
       assert(std::abs(lo) < range);
       assert((hi*range+lo)==v);
    }

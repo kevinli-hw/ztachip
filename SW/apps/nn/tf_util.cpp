@@ -165,7 +165,6 @@ void TfliteNn::QuantizeMultiplier(double double_multiplier, int32_t* quantized_m
   }
   const double q = frexp(double_multiplier, shift);
   int64_t q_fixed = static_cast<int64_t>(round(q * (1ll << 31)));
-  printf("double_multiplier: %f, q: %f, q_fixed: %ld, shift: %d\n", double_multiplier, q, q_fixed, *shift);
   assert(q_fixed <= (1ll << 31));
   if (q_fixed == (1ll << 31)) {
     q_fixed /= 2;
@@ -186,6 +185,8 @@ void TfliteNn::QuantizeMultiplier(double double_multiplier, int32_t* quantized_m
     *shift = 0;
     q_fixed = 0;
   }
+
+  //printf("double_multiplier: %f, q: %f, q_fixed: %lld, shift: %d\n", double_multiplier, q, q_fixed, *shift);
   *quantized_multiplier = static_cast<int32_t>(q_fixed);
 }
 
@@ -200,7 +201,7 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   const int num_channels = filter->quantization.m_scale.size();
   const float input_scale = input->quantization.m_scale[0];
   const float output_scale = output->quantization.m_scale[0];
-  printf("scale num: %d, input scale: %f, output scale %f \n", num_channels, input_scale, output_scale);
+  //printf("scale num: %d, input scale: %f, output scale %f, filter scale: %f\n", num_channels, input_scale, output_scale, filter->quantization.m_scale[0]);
   const std::vector<float> &filter_scales = filter->quantization.m_scale;
   // only per-tensor quantization ??
   if(num_channels != 1) {
@@ -243,12 +244,10 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   // Populate quantization parameteters with multiplier and shift.
   QuantizeMultiplier(real_multiplier, multiplier, &exponent);
   *shift = -exponent;
-  printf("input type: %d\n", input->type);
   if (input->type == NeuralNetTensorType_UINT8)
     CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
   else
     CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
-  printf("min: %ld, max: %ld\n", *output_activation_min, *output_activation_max);
   return ZtaStatusOk;
 }
 

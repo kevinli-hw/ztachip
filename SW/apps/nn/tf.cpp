@@ -263,6 +263,7 @@ ZtaStatus TfliteNn::Verify() {
                                     tflite::Padding_SAME, //Padding
                                     &out_height,
                                     &out_width);
+               printf("padding: %ld, %ld\n", pad.w, pad.h);
                def.u.conv.pad_w=pad.w;
                def.u.conv.pad_h=pad.h;
                def.u.conv.stride_w=1;
@@ -281,6 +282,8 @@ ZtaStatus TfliteNn::Verify() {
                def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = -weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
+               printf("multiplier: %ld, shift: %ld\n", def.u.conv.output_multiplier, def.u.conv.output_shift);
+               printf("offset input: %ld, weights: %ld, output: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
                def.u.conv.bias=m_buffers[m_tensors[op->inputs()->Get(2)].m_buffer].buf;
@@ -292,7 +295,6 @@ ZtaStatus TfliteNn::Verify() {
                def.u.conv.bias_shape=&bias.m_shape;
                def.input.push_back(op->inputs()->Get(0));
                def.output.push_back(op->outputs()->Get(0));
-               printf("input type: %d, output type: %d\n", input.type, output.type);
                break;
             }
             case NeuralNetOperatorConcatenation: {

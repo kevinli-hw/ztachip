@@ -1243,7 +1243,7 @@ int test_model(){
    TfliteNn TF2;
    int8_t* result;
    uint8_t *input_buf;
-   int buf_size;
+   //int buf_size;
 
    std::vector<int> input_dim={3,7,7};
    rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
@@ -1295,7 +1295,7 @@ int test_model(){
    //fclose(fp);
    //free(p);
    result = (int8_t*)output.GetBuf();
-   buf_size =  output.GetBufLen();
+   //buf_size =  output.GetBufLen();
    printf("singel conv result: ");
    for (int i=0; i<10; i++)
    {
@@ -1317,7 +1317,7 @@ int test_model_2(){
    TfliteNn TF2;
    int8_t* result;
    uint8_t *input_buf;
-   int buf_size;
+   //int buf_size;
 
    std::vector<int> input_dim={3,7,7};
    rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
@@ -1369,7 +1369,7 @@ int test_model_2(){
    //fclose(fp);
    //free(p);
    result = (int8_t*)output.GetBuf();
-   buf_size =  output.GetBufLen();
+   //buf_size =  output.GetBufLen();
    printf("single fc result: ");
    for (int i=0; i<10; i++)
    {
