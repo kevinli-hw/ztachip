@@ -38,6 +38,7 @@ int test_model_2(){
 
    assert(rc==ZtaStatusOk);
    TF2.Create("single_fc_int8.tflite",&input,1,&output);
+   //TF2.Create("single_conv_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 

@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <string.h>
 #include "../src/soc.h"
-#include "../fs/gen/single_conv_int8.c"
+//#include "../fs/gen/single_conv_int8.c"
 #include "../fs/gen/single_fc_int8.c"
 
 // This file implements functions required by newlib
@@ -102,17 +102,19 @@ int _open(const char *name, int flags, int mode) {
       errno = ENOENT;
       return -1;
    }
-   if(strcmp(name,"single_conv_int8.tflite")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(single_conv_int8);
-      files[i].body=single_conv_int8;
-   } else if(strcmp(name,"single_fc_int8.tflite")==0) {
+   //if(strcmp(name,"single_conv_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_int8);
+   //   files[i].body=single_conv_int8;
+   //}
+   if(strcmp(name,"single_fc_int8.tflite")==0) {
 	    files[i].status=true;
 	    files[i].curr=0;
       files[i].len=sizeof(single_fc_int8);
       files[i].body=single_fc_int8;
-   } else {
+   }
+   else {
       errno = ENOENT;
       return -1;
    }
