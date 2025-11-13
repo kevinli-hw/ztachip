@@ -1336,8 +1336,8 @@ int test_model_2(){
    //rc=input.CreateWithBitmap("classifier_input.bmp");
    assert(rc==ZtaStatusOk);
    //TF2.Create("resnet50_int8.tflite",&input,1,&output);
-   //TF2.Create("single_fc_int8.tflite",&input,1,&output);
-   TF2.Create("single_conv_int8.tflite",&input,1,&output);
+   TF2.Create("single_fc_int8.tflite",&input,1,&output);
+   //TF2.Create("single_conv_int8.tflite",&input,1,&output);
    //TF2.Create("conv7x7_fc120_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();

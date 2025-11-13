@@ -29,6 +29,7 @@
 #include "kernels/fcn.h"
 #include "kernels/nn.h"
 #include "kernels/conv.h"
+#include "../../../../SW/src/soc.h"
 
 // Do convolution layer
 
@@ -56,6 +57,7 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
       topdim=1;
       botcnt=(*op->input_shape[0])[1];
       botdim=1+2*op->u.conv.pad_w;
+      APB[APB_LED]=0x11111111;
       m_shmFilter=GenFcWeight(op->u.conv.filter,topcnt,botcnt,
                               m_strategy.fcn.coef_dim,
                               &m_strategy.fcn.nthread,
@@ -116,6 +118,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
    }
 
    if(op->op==NeuralNetOperatorFC){
+      APB[0]=0x11111111;
          bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
          kernel_innerProduct_exe(
             (unsigned int)GetJobId(queue),
@@ -132,6 +135,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
             op->u.conv.output_scale,
             m_strategy.fcn.npcore,
             m_strategy.fcn.nthread);
+      APB[0]=0x44444444;
    }
    else if(op->op==NeuralNetOperatorConv2D) {
       if(((*op->input_shape[0])[1]==1)?true:false) {
@@ -428,6 +432,8 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
    int num_pcore=NUM_PCORE;
    nthread=-1;
    int min_extra=-1;
+
+   APB[APB_LED]=0x11111112;
    for(int i=(NUM_THREAD_PER_CORE/2);i < NUM_THREAD_PER_CORE;i++) {
       dx=num_pcore*i*VECTOR_WIDTH;
       int extra=dx*((_topcnt+dx-1)/dx)-_topcnt;
@@ -436,6 +442,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
          nthread=i;
       }
    }
+   APB[APB_LED]=0x11111113;
    dx=num_pcore*nthread*VECTOR_WIDTH;
    topcnt2=((_topcnt+dx-1)/dx)*dx;
    botcnt2=((_botcnt+IP_CHUNK_SIZE-1)/IP_CHUNK_SIZE)*IP_CHUNK_SIZE;
@@ -447,6 +454,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
          _gen_coef[j + i*botcnt2] = _coef[j + i*(_botcnt)];
       }
    }
+   APB[APB_LED]=0x11111114;
    for(int pid = 0; pid < 2; pid++) {
       for(int i = (pid == 0) ? 0 : dx; i < _topcnt; i += 2 * dx) {
          for(int j = 0; j < _botcnt; j += IP_CHUNK_SIZE) {
@@ -466,6 +474,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
          }
       }
    }
+   APB[APB_LED]=0x11111115;
    _topcnt = topcnt2;
    _botcnt = botcnt2/IP_CHUNK_SIZE;
    // Transpose the matrix
@@ -479,6 +488,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
                IP_CHUNK_SIZE);
       }
    }
+   APB[APB_LED]=0x11111116;
    memcpy(_gen_coef,temp3,h*w*IP_CHUNK_SIZE);
    free(temp3);
    coef_dim[0]=_topcnt;
@@ -486,6 +496,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
    coef_dim[2]=IP_CHUNK_SIZE;
    *_nthread=nthread;
    *_npcore=num_pcore;
+   APB[APB_LED]=0x11111117;
    return out_p;
 }
 

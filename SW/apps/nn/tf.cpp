@@ -25,6 +25,7 @@
 #include "../../base/types.h"
 #include "../../base/util.h"
 #include "../../base/ztalib.h"
+#include "../../src/soc.h"
 #include "tf.h"
 
 // Graph node to execute TFLITE model
@@ -83,10 +84,11 @@ ZtaStatus TfliteNn::Verify() {
    NeuralNet::LoadBegin(m_input,m_output);
 
    m_fp=fopen(m_modelName.c_str(),"rb");
-   //printf("model_name: %s\n", m_modelName.c_str());
+   printf("model_name: %s\n", m_modelName.c_str());
    assert(m_fp);
    fseek(m_fp, 0L, SEEK_END);
    sz = ftell(m_fp);
+   printf("sz = %zu\n", sz);
    m_buf=(uint8_t *)malloc(sz);
    fseek(m_fp,0,SEEK_SET);
    if(fread(m_buf,1,sz,m_fp) != sz) {
@@ -469,6 +471,7 @@ ZtaStatus TfliteNn::Verify() {
             default:
                assert(0); // ????
          }
+
          if(!(layer=NeuralNet::CreateLayer(i,&def)))
             return ZtaStatusFail;
          //printf("layer %ld is created, opcode: %ld\n", i, op->opcode_index());
@@ -476,6 +479,7 @@ ZtaStatus TfliteNn::Verify() {
             return ZtaStatusFail;
          //printf("layer %ld is prepared, opcode: %ld\n", i, op->opcode_index());
       }
+
       NeuralNet::LoadEnd();
    }
    //printf("Verify ends.\n");

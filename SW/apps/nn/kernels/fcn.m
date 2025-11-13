@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
+#include "../../../../SW/src/soc.h"
 #include "fcn.h"
 #include "fcn.p.img"
 
@@ -258,6 +259,7 @@ void kernel_innerProduct_exe(
    int _num_thread
 )
 {
+   APB[0]=0x22222222;
    RequestFcn req;
 
    ztaInitPcore(zta_pcore_img);
@@ -281,6 +283,7 @@ void kernel_innerProduct_exe(
    ztaDualHartExecute(innerProduct,&req);
 
    ztaJobDone(_req_id);
+   APB[0]=0x33333333;
 }
 
 // Process pooling layer request from host
