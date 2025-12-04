@@ -328,6 +328,9 @@
 
 #define REG_DP_VM_TOGGLE  9
 
+// Debug: layer ID
+#define REG_LAYER_ID  31
+
 // Sub function for REG_DP_SRC_TEMPLATE and REG_DP_DST_TEMPLATE
 
 #define DPREG_STRIDE0  0

@@ -55,10 +55,14 @@ static void innerProduct(void *_p,int pid) {
    int coeftopcnt;
    int dx2;
    int index2;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   //int botfmt=UINT8;
+   //int biasfmt=INT16;
+   //int weightfmt=UINT8;
+   int topfmt=INT8;
+   int botfmt=INT8;
    int biasfmt=INT16;
-   int weightfmt=UINT8;
+   int weightfmt=INT8;
    
    nthread=req->num_thread;
    coeftopcnt=req->coeftopcnt*IP_CHUNK_SIZE;
@@ -259,7 +263,6 @@ void kernel_innerProduct_exe(
    int _num_thread
 )
 {
-   APB[0]=0x22222222;
    RequestFcn req;
 
    ztaInitPcore(zta_pcore_img);
@@ -283,7 +286,6 @@ void kernel_innerProduct_exe(
    ztaDualHartExecute(innerProduct,&req);
 
    ztaJobDone(_req_id);
-   APB[0]=0x33333333;
 }
 
 // Process pooling layer request from host

@@ -51,33 +51,43 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
    switch(op) {
       case NeuralNetOperatorConv2D:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
+         layer->layer_id = NeuralNetOperatorConv2D;
          break;
       case NeuralNetOperatorConvDepthWise:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionTypeDepthWise);
+         layer->layer_id = NeuralNetOperatorConvDepthWise;
          break;
       case NeuralNetOperatorFC:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
+         layer->layer_id = NeuralNetOperatorFC;
          break;
       case NeuralNetOperatorConcatenation:
          layer=new NeuralNetLayerConcat(this,op_);
+         layer->layer_id = NeuralNetOperatorConcatenation;
          break;
       case NeuralNetOperatorLogistic:
          layer=new NeuralNetLayerLogistic(this,op_);
+         layer->layer_id = NeuralNetOperatorLogistic;
          break;
       case NeuralNetOperatorReshape:
          layer=new NeuralNetLayerReshape(this,op_);
+         layer->layer_id = NeuralNetOperatorReshape;
          break;
       case NeuralNetOperatorDetection:
          layer=new NeuralNetLayerObjDetect(this,op_);
+         layer->layer_id = NeuralNetOperatorDetection;
          break;
       case NeuralNetOperatorAdd:
          layer=new NeuralNetLayerAdd(this,op_);
+         layer->layer_id = NeuralNetOperatorAdd;
          break;
       case NeuralNetOperatorAvgPool2D:
          layer=new NeuralNetLayerPoolAvg(this,op_);
+         layer->layer_id = NeuralNetOperatorAvgPool2D;
          break;
       case NeuralNetOperatorUnknown:
          layer=0;
+         layer->layer_id = NeuralNetOperatorUnknown;
          break;
       default:
          assert(0);
@@ -391,6 +401,7 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
          if(!GraphNode::AllRequestAreCompleted(queue))
             return ZtaStatusPending;
       }
+      ZTAM_GREG(0,REG_LAYER_ID,0)=m_operators[m_runningStep]->layer_id; // every layer id
       rc=m_operators[m_runningStep]->Evaluate(queue);
       if(rc==ZtaStatusPending)
          return rc;
@@ -404,8 +415,9 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
    }
    if(m_runningStep >= (int)m_operators.size()) {
       m_runningStep=-1;
-      endTime = (int32_t)TimeGet();
-      printf("current task time: %ld\n", endTime-startTime);
+      //endTime = (int32_t)TimeGet();
+      //printf("current task time: %ld\n", endTime-startTime);
+      ZTAM_GREG(0,REG_LAYER_ID,0)=0; // end
       return ZtaStatusOk; // Scheduling is done
    } else {
       return ZtaStatusPending;

@@ -70,7 +70,8 @@ typedef enum {
 } NeuralNetActivation;
 
 typedef enum {
-   NeuralNetOperatorConv2D=0,
+   NeuralNetOperatorUnknown=0,
+   NeuralNetOperatorConv2D,
    NeuralNetOperatorConvDepthWise,
    NeuralNetOperatorConcatenation,
    NeuralNetOperatorLogistic,
@@ -78,7 +79,6 @@ typedef enum {
    NeuralNetOperatorDetection,
    NeuralNetOperatorAdd,
    NeuralNetOperatorAvgPool2D,
-   NeuralNetOperatorUnknown,
    NeuralNetOperatorFC,
    NeuralNetOperatorMax
 } NeuralNetOperator;
@@ -216,6 +216,7 @@ public:
 public:
    NeuralNet *m_nn;
    NeuralNetOperatorDef m_def;
+   NeuralNetOperator layer_id;
 };
 
 class NeuralNet : public GraphNode {
