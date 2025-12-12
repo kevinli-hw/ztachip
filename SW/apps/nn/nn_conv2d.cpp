@@ -49,7 +49,9 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
    int kz=(*op->u.conv.filter_shape)[1];
    int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
    int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+#ifdef PRINTF_LOG_ON
    printf("bias: %lld\n", bias);
+#endif
    //printf("D: %lld\n",D);
    if (op->op == NeuralNetOperatorFC){
    // This is FCN Layer
@@ -112,13 +114,14 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
       // Output flat format only
       out_fmt=kTensorFormatFlat;
    } else {
+#ifdef PRINF_LOG_ON
       printf("op_index: %d, op_output_shape: %d\n", op->index, op->output.size());
+#endif
       assert(0); // ?????
    }
 
    if(op->op==NeuralNetOperatorFC){
          bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
-         APB[APB_LED]=0x00000001;
          kernel_innerProduct_exe(
             (unsigned int)GetJobId(queue),
 			(unsigned int)m_shmFilter,
@@ -242,13 +245,19 @@ int16_t NeuralNetLayerConv2D::SpuEvalActivation(int16_t _in,void *pparm,uint32_t
       }
       SCALE=(bits > 11)?bits-11:0;
       op->u.conv.output_scale=SCALE;
+#ifdef PRINTF_LOG_ON
+      printf("N: %lld, D: %lld, SCALE: %d\n", N, D, SCALE);
+#endif
    }
    float x;
    x = (float)_in*((float)(1<<SCALE));
    x = x+X_min;
    //x=(x*N+D/2)/D+OFFSET;
    //quantization changed to INT8
-   x=(x*N+(x*N>0)?D/2:(-D/2))/D+OFFSET;
+   if(x > 0)
+     x = (x*N+D/2)/D+OFFSET;
+   else
+     x = (x*N-D/2)/D+OFFSET;
    if(x < x_min)
       x=(float)x_min;
    else if(x > x_max)
@@ -408,7 +417,9 @@ void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationB
       v=bias[i]-activationBias;
       hi=(int16_t)(v/range);
       lo=(int16_t)(v%range);
+#ifdef PRINF_LOG_ON
       printf("bias[%d]: %ld, hi: %d, lo: %d\n", i, bias[i], hi, lo);
+#endif
       biasHi[i]=hi;
       biasLo[i]=lo;
       assert(std::abs(hi) < range); // ?

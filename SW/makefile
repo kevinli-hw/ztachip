@@ -27,6 +27,7 @@ BENCH=no
 MULDIV=yes
 MAIN = src/main.cpp
 UNIT_TEST?=yes
+PRINTF_LOG=no
 
 SRCS = 	base/simplelib.c \
 	base/ztalib.c \
@@ -136,6 +137,10 @@ endif
 
 ifeq ($(LLM_TEST),yes)
 	CFLAGS += -DZTACHIP_LLM_TEST
+endif
+
+ifeq ($(PRINTF_LOG),yes)
+	CFLAGS += -PRINTF_LOG_ON
 endif
 
 CFLAGS += -I./apps/nn/flatbuffer

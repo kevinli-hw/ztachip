@@ -53,6 +53,7 @@ int test_model_2(){
 
 int main()
 {
+   APB[APB_LED]=0x00000000;
    ztaInit();
 
    test_model_2();

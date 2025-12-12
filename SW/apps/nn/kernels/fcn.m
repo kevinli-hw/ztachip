@@ -67,6 +67,7 @@ static void innerProduct(void *_p,int pid) {
    nthread=req->num_thread;
    coeftopcnt=req->coeftopcnt*IP_CHUNK_SIZE;
    dx2=req->dx*IP_CHUNK_SIZE;
+   APB[APB_LED]=0x00000001;
    > DTYPE(INT16)PCORE(NUM_PCORE)[*][0:nthread-1].inner_product::init._out_scale <= INT16(req->top_scale);
    > EXE_LOCKSTEP(inner_product::init,NUM_PCORE,nthread);
    ztaTaskYield();

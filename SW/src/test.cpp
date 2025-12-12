@@ -1044,6 +1044,7 @@ void test_mobinet()
    rc=input.CreateWithBitmap("classifier_input.bmp");
    assert(rc==ZtaStatusOk);
    TF2.Create("mobilenet_v2_1_0_224_quant.tflite",&input,1,&output);
+   //TF2.Create("mobilenet_v2_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -1394,10 +1395,10 @@ int test()
      //test_mobinet_ssd();
 //   gettimeofday(&start, NULL);
 //
-     //test_mobinet();
+     test_mobinet();
 //   test_vector_div();
      //test_model();
-     test_model_2();
+//     test_model_2();
 //   gettimeofday(&end, NULL);
 //   seconds  = end.tv_sec  - start.tv_sec;
 //   useconds = end.tv_usec - start.tv_usec;

@@ -45,6 +45,7 @@
 
 #define DP_TEMPLATE_MAX  (1<<DP_TEMPLATE_ID_WIDTH)
 
+//#define DATA_BIT_WIDTH  12
 #define DATA_BIT_WIDTH  16
 
 // Max shift distance

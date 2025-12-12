@@ -208,19 +208,19 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
      return ZtaStatusFail;
   }
   // per-channel quantization, but no usage
-  //for (int i = 0; i < num_channels; ++i) {
-  //  const double filter_scale = static_cast<double>(filter_scales[i]);
-  //  const double effective_output_scale = static_cast<double>(input_scale) *
-  //                                        filter_scale /
-  //                                        static_cast<double>(output_scale);
-  //  int32_t significand;
-  //  int shift;
-  //  QuantizeMultiplier(effective_output_scale, &significand, &shift);
-  //  if(per_channel_multiplier)
-  //    per_channel_multiplier[i] = significand;
-  //  if(per_channel_shift)
-  //    per_channel_shift[i] = shift;
-  //}
+  for (int i = 0; i < num_channels; ++i) {
+    const double filter_scale = static_cast<double>(filter_scales[i]);
+    const double effective_output_scale = static_cast<double>(input_scale) *
+                                          filter_scale /
+                                          static_cast<double>(output_scale);
+    int32_t significand;
+    int shift;
+    QuantizeMultiplier(effective_output_scale, &significand, &shift);
+    if(per_channel_multiplier)
+      per_channel_multiplier[i] = significand;
+    if(per_channel_shift)
+      per_channel_shift[i] = shift;
+  }
 
   // Populate scalar quantization parameters.
   // This check on legacy quantization parameters is kept only for backward

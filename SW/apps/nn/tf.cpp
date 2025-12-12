@@ -88,7 +88,6 @@ ZtaStatus TfliteNn::Verify() {
    assert(m_fp);
    fseek(m_fp, 0L, SEEK_END);
    sz = ftell(m_fp);
-   printf("sz = %zu\n", sz);
    m_buf=(uint8_t *)malloc(sz);
    fseek(m_fp,0,SEEK_SET);
    if(fread(m_buf,1,sz,m_fp) != sz) {
@@ -186,7 +185,9 @@ ZtaStatus TfliteNn::Verify() {
                int height = input.m_shape[1];
                int filter_width = filter.m_shape[2];
                int filter_height = filter.m_shape[1];
+#ifdef PRINTF_LOG_ON
                printf("input width: %d, input height: %d; filter_width: %d, filter height: %d\n", width, height, filter_width, filter_height);
+#endif
                int out_width,out_height;
                TfliteNnPadding pad;
                pad = ComputePaddingHeightWidth(
@@ -265,7 +266,9 @@ ZtaStatus TfliteNn::Verify() {
                                     tflite::Padding_SAME, //Padding
                                     &out_height,
                                     &out_width);
+#ifdef PRINTF_LOG_ON
                printf("padding: %ld, %ld\n", pad.w, pad.h);
+#endif
                def.u.conv.pad_w=pad.w;
                def.u.conv.pad_h=pad.h;
                def.u.conv.stride_w=1;
@@ -284,8 +287,10 @@ ZtaStatus TfliteNn::Verify() {
                def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = -weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
+#ifdef PRINTF_LOG_ON
                printf("multiplier: %ld, shift: %ld\n", def.u.conv.output_multiplier, def.u.conv.output_shift);
                printf("offset input: %ld, weights: %ld, output: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
+#endif
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
                def.u.conv.bias=m_buffers[m_tensors[op->inputs()->Get(2)].m_buffer].buf;
@@ -474,15 +479,12 @@ ZtaStatus TfliteNn::Verify() {
 
          if(!(layer=NeuralNet::CreateLayer(i,&def)))
             return ZtaStatusFail;
-         //printf("layer %ld is created, opcode: %ld\n", i, op->opcode_index());
          if(layer->Prepare() != ZtaStatusOk)
             return ZtaStatusFail;
-         //printf("layer %ld is prepared, opcode: %ld\n", i, op->opcode_index());
       }
 
       NeuralNet::LoadEnd();
    }
-   //printf("Verify ends.\n");
    return ZtaStatusOk;
 }
 
