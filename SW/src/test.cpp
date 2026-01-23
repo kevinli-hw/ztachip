@@ -1395,10 +1395,10 @@ int test()
      //test_mobinet_ssd();
 //   gettimeofday(&start, NULL);
 //
-     test_mobinet();
+//     test_mobinet();
 //   test_vector_div();
      //test_model();
-//     test_model_2();
+     test_model_2();
 //   gettimeofday(&end, NULL);
 //   seconds  = end.tv_sec  - start.tv_sec;
 //   useconds = end.tv_usec - start.tv_usec;

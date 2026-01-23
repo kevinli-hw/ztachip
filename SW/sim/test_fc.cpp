@@ -47,6 +47,14 @@ int test_model_2(){
    graph.RunUntilCompletion();
    FLUSH_DATA_CACHE();
 
+   result = (int8_t*)output.GetBuf();
+   printf("single fc result: ");
+   for (int i=0; i<10; i++)
+   {
+      printf("%d ", result[i]);
+   }
+   printf("\n");
+
    TF2.Unload();
    return 0;
 }

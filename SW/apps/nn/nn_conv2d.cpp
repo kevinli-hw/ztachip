@@ -114,7 +114,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
       // Output flat format only
       out_fmt=kTensorFormatFlat;
    } else {
-#ifdef PRINF_LOG_ON
+#ifdef PRINTF_LOG_ON
       printf("op_index: %d, op_output_shape: %d\n", op->index, op->output.size());
 #endif
       assert(0); // ?????
@@ -236,6 +236,9 @@ int16_t NeuralNetLayerConv2D::SpuEvalActivation(int16_t _in,void *pparm,uint32_t
       x_min=op->u.conv.output_activation_min;
       X_max=((x_max-OFFSET)*D)/N;
       X_min=((x_min-OFFSET)*D)/N;
+#ifdef PRINTF_LOG_ON
+      printf("X_min: %lld\n", X_min);
+#endif
       range=(X_max-X_min);
       assert(range >= 0);
       bits=0;
@@ -417,7 +420,7 @@ void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationB
       v=bias[i]-activationBias;
       hi=(int16_t)(v/range);
       lo=(int16_t)(v%range);
-#ifdef PRINF_LOG_ON
+#ifdef PRINTF_LOG_ON
       printf("bias[%d]: %ld, hi: %d, lo: %d\n", i, bias[i], hi, lo);
 #endif
       biasHi[i]=hi;
@@ -458,6 +461,7 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenFcWeight(uint8_t *_coef,int _topcnt,int 
    size=topcnt2*botcnt2;
    out_p=m_nn->BufferAllocate(size);
    _gen_coef = (int8_t *)ZTA_SHARED_MEM_VIRTUAL(out_p);
+   memset(_gen_coef, 0, size);
    for(int i = 0; i < _topcnt; i++) {
       for(int j = 0; j < _botcnt; j++) {
          _gen_coef[j + i*botcnt2] = _coef[j + i*(_botcnt)];
