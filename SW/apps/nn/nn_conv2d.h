@@ -50,12 +50,14 @@ private:
                                  int max_conv_dx,int max_conv_dy,int max_dycnt);
    ZTA_SHARED_MEM GenConvolutionWeight(uint8_t *_coef,std::vector<int> &shape,int topcnt,int botcnt,int kz);
    ZTA_SHARED_MEM GenFcWeight(uint8_t *_coef,int _topcnt,int _botcnt,int *coef_dim,int *_nthread,int *_npcore);
-   void GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo);
+   void GenBias(int32_t *bias,int num_channel,int32_t *activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo);
 public:
    ConvolutionType m_type;
    ZTA_SHARED_MEM m_shmFilter;
    ZTA_SHARED_MEM m_shmBiasHi;
    ZTA_SHARED_MEM m_shmBiasLo;
+   ZTA_SHARED_MEM m_shmMultiplier;
+   ZTA_SHARED_MEM m_shmShift;
    ZTA_SHARED_MEM m_shmSpu;
    union {
       struct {

@@ -215,10 +215,13 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0);
-               def.u.conv.output_shift = -def.u.conv.output_shift;
-               def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
-               def.u.conv.weights_offset = -filter.quantization.m_zeroPoint[0];
+                     &def.output_multiplier_per_channel,
+                     &def.output_shift_per_channel,
+                     &def.u.conv.per_tensor,
+                     &def.u.conv.per_channel);
+               //def.u.conv.output_shift = -def.u.conv.output_shift;
+               def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
+               def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
@@ -282,12 +285,18 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0); //per-tensor quantization
-               def.u.conv.output_shift = -def.u.conv.output_shift;
-               def.u.conv.input_offset = -input.quantization.m_zeroPoint[0];
-               def.u.conv.weights_offset = -weights.quantization.m_zeroPoint[0];
+                     0,0,
+                     &def.u.conv.per_tensor,
+                     &def.u.conv.per_channel); //per-tensor quantization
+               //def.u.conv.output_shift = -def.u.conv.output_shift;
+               def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
+               def.u.conv.weights_offset = weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
 #ifdef PRINTF_LOG_ON
+               if (def.u.conv.per_tensor)
+                  printf("per tensor quantization\n");
+               else
+                  printf("per channel quantization\n");
                printf("multiplier: %ld, shift: %ld\n", def.u.conv.output_multiplier, def.u.conv.output_shift);
                printf("offset input: %ld, weights: %ld, output: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
 #endif
