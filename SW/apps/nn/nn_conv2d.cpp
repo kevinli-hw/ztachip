@@ -46,8 +46,8 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
    int botcnt=(*op->input_shape[0])[3];
    int botdim=(*op->input_shape[0])[1]+2*op->u.conv.pad_w;
    int kz=(*op->u.conv.filter_shape)[1];
-   //int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
-   //int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+   int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
+   int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
   if (op->op == NeuralNetOperatorFC){
    // This is FCN Layer
       topcnt=(*op->output_shape[0])[1];
@@ -81,8 +81,8 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
                            MAX_CONV_Y_DIM);
    }
    // Gen Bias: per_tensor/per_channel
-   int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
-   int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+   //int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
+   //int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
 
    GenBias((int32_t *)op->u.conv.bias,topcnt,(int32_t)bias,&m_shmBiasHi,&m_shmBiasLo);
 

@@ -1280,8 +1280,8 @@ int test()
 //   test_yuyv_to_bgr();
 //   test_of();
 //   test_color();
-//   test_model();
-   test_mobilenet_v2();
+   test_model();
+//   test_mobilenet_v2();
    return 0;
 }
 
