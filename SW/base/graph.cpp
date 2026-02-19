@@ -16,7 +16,6 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
-#include <stdio.h>
 #include <time.h>
 #include <stdarg.h>
 #include <unistd.h>
@@ -117,9 +116,8 @@ ZtaStatus Graph::run(int timeout) {
       m_nextNodeToSchedule=-1;
       m_timeElapsed = 0;
       return ZtaStatusOk;
-   } else{
+   } else
       return ZtaStatusPending;
-   }
 }
 
 GraphNode::GraphNode() {

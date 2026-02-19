@@ -20,9 +20,11 @@
 //#include "../fs/gen/single_conv_int8.c"
 #include "../fs/gen/single_fc_int8.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
-//#include "../fs/gen/classifier_input.c"
+#include "../fs/gen/mobilenet_v2_int8_bs1.c"
+#include "../fs/gen/classifier_input.c"
 //#include "../fs/gen/classifier.c"
-//#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
+#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
+#include "../thirdparty/FatFs/ff.h"
 
 // This file implements functions required by newlib
 // Functions implement filesystem calls, task management and memory management
@@ -35,12 +37,17 @@ extern void _heap_end();
 
 static unsigned int heap=(unsigned int)_heap_start;
 
+static bool usd_is_init=false;
+
+static FATFS FatFs;
+
 // List of files opened
 
 static struct {
    bool status;
    int len;
    int curr;
+   FIL fp;
    const uint8_t *body;
 } files[FP_MAX_NUM];
 
@@ -98,6 +105,7 @@ unsigned int heap_avail() {
 
 int _open(const char *name, int flags, int mode) {
    int i;
+   FILINFO finfo;
    for(i=0;i < FP_MAX_NUM;i++) {
       if(!files[i].status)
          break;
@@ -118,37 +126,57 @@ int _open(const char *name, int flags, int mode) {
       files[i].len=sizeof(single_fc_int8);
       files[i].body=single_fc_int8;
    }
-   //if(strcmp(name,"mobilenet_v2_int8.tflite")==0) {
+   else if(strcmp(name,"mobilenet_v2_int8_bs1.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(mobilenet_v2_int8_bs1);
+      files[i].body=mobilenet_v2_int8_bs1;
+   }
+   //else if(strcmp(name,"mobilenet_v2_int8.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(mobilenet_v2_int8);
    //   files[i].body=mobilenet_v2_int8;
    //}
-   //else if(strcmp(name,"classifier_input.bmp")==0) {
-	 // files[i].status=true;
-	 // files[i].curr=0;
-   //   files[i].len=sizeof(classifier_input);
-   //   files[i].body=classifier_input;
-   //}
+   else if(strcmp(name,"classifier_input.bmp")==0) {
+	  files[i].status=true;
+	  files[i].curr=0;
+      files[i].len=sizeof(classifier_input);
+      files[i].body=classifier_input;
+   }
    //else if(strcmp(name,"classifier.bin")==0) {
 	 // files[i].status=true;
 	 // files[i].curr=0;
    //   files[i].len=sizeof(classifier);
    //   files[i].body=classifier;
    //}
-   //else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
-	 // files[i].status=true;
-	 // files[i].curr=0;
-   //   files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
-   //   files[i].body=mobilenet_v2_1_0_224_quant;
-   //}
-   else {
-      errno = ENOENT;
-      return -1;
+   else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
+	  files[i].status=true;
+	  files[i].curr=0;
+      files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
+      files[i].body=mobilenet_v2_1_0_224_quant;
+   }
+   else
+   {
+      if(!usd_is_init) {
+         if(f_mount(&FatFs, "", 0) != FR_OK) {
+            errno = ENOENT;
+            return -1;
+         }
+         usd_is_init = true;
+      }
+      if(f_open(&files[i].fp,name,FA_READ)==FR_OK) {
+         f_stat (name,&finfo);
+         files[i].status=true;
+         files[i].curr=0;
+         files[i].len=finfo.fsize;
+         files[i].body=0; // body=0 means this is not a RAM based file
+      } else {
+         errno = ENOENT;
+         return -1;
+      }
    }
    return i+FP_FIRST;
-   //errno = ENOENT;
-   //return -1;
 }
 
 // Close a file
@@ -160,6 +188,9 @@ int _close(int file) {
       return -1;
    }
    files[file].status=false;
+   if(files[file].body==0) {
+      f_close(&files[file].fp);
+   }
    return 0;
 }
 
@@ -167,6 +198,8 @@ int _close(int file) {
 
 ssize_t _read(int file, void *ptr, size_t len) {
    int remain;
+   int len2;
+
    file -= FP_FIRST;
    if((file < 0 || file >= FP_MAX_NUM) || !files[file].status) {
       errno = EBADF;
@@ -175,7 +208,11 @@ ssize_t _read(int file, void *ptr, size_t len) {
    remain=files[file].len-files[file].curr;
    if(len > remain)
       len=remain;
-   memcpy(ptr,files[file].body+files[file].curr,len);
+   if(files[file].body)
+      memcpy(ptr,files[file].body+files[file].curr,len);
+   else {
+      f_read(&files[file].fp,ptr,len,&len2);
+   }
    files[file].curr += len;
    return len;
 }
@@ -228,5 +265,7 @@ off_t _lseek(int file, off_t ptr, int dir) {
       files[file].curr=files[file].len;
    if(files[file].curr>files[file].len)
       files[file].curr=files[file].len;
+   if(files[file].body==0)
+      f_lseek(&files[file].fp,files[file].curr);
    return files[file].curr;
 }

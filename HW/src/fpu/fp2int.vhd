@@ -30,7 +30,6 @@ use work.ztachip_pkg.all;
 entity fp2int is
    generic
    (
-      WIDTH:integer;
       LATENCY:natural
    );
    port 
@@ -38,40 +37,40 @@ entity fp2int is
       SIGNAL reset_in    : in std_logic;
       SIGNAL clock_in    : in std_logic;
       SIGNAL x_in        : in fp32_t;
-      SIGNAL y_out       : out std_logic_vector(WIDTH-1 downto 0)
+      SIGNAL y_out       : out std_logic_vector(31 downto 0)
    );
 end fp2int;
 
 architecture rtl of fp2int is
-signal mantissa:std_logic_vector(WIDTH-2 downto 0);
+signal mantissa:std_logic_vector(6 downto 0);
 signal exp:unsigned(7 downto 0);
 signal sign:std_logic;
 signal shift:unsigned(7 downto 0);
-signal mantissa_shift:std_logic_vector(WIDTH-2 downto 0);
-signal y:std_logic_vector(WIDTH-1 downto 0);
+signal mantissa_shift:std_logic_vector(6 downto 0);
+signal y:std_logic_vector(7 downto 0);
 
-signal mantissa_r:std_logic_vector(WIDTH-2 downto 0);
-signal zero_r:std_logic;
-signal zero_rr:std_logic;
+signal mantissa_r:std_logic_vector(6 downto 0);
 signal shift_r:unsigned(7 downto 0);
-signal mantissa_shift_r:std_logic_vector(WIDTH-2 downto 0);
+signal mantissa_shift_r:std_logic_vector(6 downto 0);
 signal exp_rr:unsigned(7 downto 0);
 signal exp_r:unsigned(7 downto 0);
-signal y_r:std_logic_vector(WIDTH-1 downto 0);
+signal y_r:std_logic_vector(7 downto 0);
 signal sign_r:std_logic;
 signal sign_rr:std_logic;
+signal round_r:std_logic;
+signal round_rr:std_logic;
 begin
 
 shift_i: SHIFT_RIGHT_L
    generic map
    (
-      DIST_WIDTH=>4,
+      DIST_WIDTH=>3,
       DATA_WIDTH=>mantissa'length
    )
    port map 
    (
       data_in=>mantissa_r,
-      distance_in=>shift_r(3 downto 0),
+      distance_in=>shift_r(2 downto 0),
       data_out=>mantissa_shift
    );
 
@@ -79,26 +78,29 @@ sign <= x_in(31);
 
 exp <= unsigned(x_in(30 downto 23));
 
-mantissa <= '1' & x_in(22 downto 25-WIDTH);
+mantissa <= '1' & x_in(22 downto 17);
 
-shift <= to_unsigned(125+WIDTH,exp'length)-unsigned(exp);
+shift <= to_unsigned(133,exp'length)-unsigned(exp);
 
-y_out <= y_r;
+y_out(7 downto 0) <= y_r;
 
-process(exp_rr,sign_rr,mantissa_shift_r,zero_rr)
-variable y_v:std_logic_vector(WIDTH-1 downto 0);
+y_out(31 downto 8) <= (others=>'0');
+
+process(exp_rr,sign_rr,mantissa_shift_r)
+variable y_v:std_logic_vector(7 downto 0);
 begin
-   if(zero_rr = '1') then
-      y_v := (others=>'0');
-   elsif(exp_rr <= to_unsigned(126,exp'length)) then
-      y_v := (others=>'0');
-   elsif(exp_rr >= to_unsigned(126+WIDTH,exp'length)) then
-      y_v(WIDTH-2 downto 0) := (others=>'1'); -- max
-      y_v(WIDTH-1) := '0';
+   if(exp_rr <= to_unsigned(126,exp'length)) then
+      y_v := "00000000";
+   elsif(exp_rr >= to_unsigned(134,exp'length)) then
+      y_v := "01111111"; -- max
    else
-      y_v := '0' & mantissa_shift_r;
+      if(round_rr='1' and mantissa_shift_r /= (mantissa_shift_r'range => '1')) then
+         y_v := '0' & std_logic_vector(unsigned(mantissa_shift_r)+to_unsigned(1,mantissa_shift_r'length));
+      else
+         y_v := '0' & mantissa_shift_r;
+      end if;
    end if;
-   if(sign_rr='1' and zero_rr='0') then
+   if(sign_rr='1') then
       y <= std_logic_vector(unsigned(not y_v) + to_unsigned(1,y_v'length));
    else
       y <= y_v;
@@ -106,17 +108,18 @@ begin
 end process;
 
 process(reset_in,clock_in)
+variable shift_v:unsigned(2 downto 0);
 begin
    if reset_in = '0' then
       mantissa_r <= (others=>'0');
-      zero_r <= '0';
-      zero_rr <= '0';
       shift_r <= (others=>'0');
       mantissa_shift_r <= (others=>'0');
       exp_rr <= (others=>'0');
       exp_r <= (others=>'0');
       sign_rr <= '0';
       sign_r <= '0';
+      round_r <= '0';
+      round_rr <= '0';
       y_r <= (others=>'0');
    else
       if clock_in'event and clock_in='1' then
@@ -128,12 +131,15 @@ begin
          sign_rr <= sign_r;
          sign_r <= sign;
          y_r <= y;
-         if(unsigned(x_in(x_in'length-2 downto 0))=to_unsigned(0,x_in'length-1)) then
-            zero_r <= '1';
+
+         round_r <= x_in(16);
+         shift_v := shift_r(2 downto 0);
+         if(shift_v=to_unsigned(0,shift_v'length)) then
+            round_rr <= round_r;
          else
-            zero_r <= '0';
+            shift_v := shift_v - 1;
+            round_rr <= mantissa_r(to_integer(shift_v));
          end if;
-         zero_rr <= zero_r;
       end if;
    end if;
 end process;

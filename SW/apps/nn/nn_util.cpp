@@ -27,6 +27,11 @@
 #include "../../base/tensor.h"
 #include "nn.h"
 
+
+int NeuralNet::GetBufferSize() {
+   return m_bufLst.size();
+}
+
 bool NeuralNet::BufferIsInit(int bufid) {
    if(bufid >= (int)m_bufLst.size())
       return false;
@@ -94,6 +99,7 @@ ZtaStatus NeuralNet::BufferAllocatePrepare(int bufid,NeuralNetTensorType type,si
       default:
          assert(0);
    }
+   //printf("bufid: %d, m_bufLst size: %d\n", bufid, (int)m_bufLst.size());
    if(bufid < (int)m_bufLst.size()) {
       if(m_bufLst[bufid].sz==0)
          m_bufLst[bufid].sz=sz;
@@ -319,7 +325,7 @@ void NeuralNet::BufferFreeAll() {
 
 // Some supporting functions to intepret inference results...
 
-// Load label file 
+// Load label file
 ZtaStatus NeuralNet::LabelLoad(const char *fname) {
    FILE *fp;
    char str[200];
@@ -363,10 +369,10 @@ ZtaStatus NeuralNet::GetTop5(uint8_t *prediction,int predictionSize,int *top5)
    for(int i=0;i < predictionSize;i++) {
       v=(prediction[i] << 16)+i;
       if(v > i4) {
-         i4=v; 
+         i4=v;
          if(i4 > i3) {
             t=i3;i3=i4;i4=t;
-            if(i3 > i2) { 
+            if(i3 > i2) {
                t=i2;i2=i3;i3=t;
                if(i2 > i1) {
                   t=i1;i1=i2;i2=t;

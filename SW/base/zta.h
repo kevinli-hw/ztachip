@@ -24,8 +24,6 @@
 #define _ZTA_H_
 
 #include "config.h"
-//#define NUM_PCORE 8  // large version
-#define NUM_PCORE 4  // small version
 
 #define MEM_MAP  0x80000000 // ztachip address as mapped on AXI bus.
 
@@ -45,8 +43,7 @@
 
 #define DP_TEMPLATE_MAX  (1<<DP_TEMPLATE_ID_WIDTH)
 
-#define DATA_BIT_WIDTH  12
-//#define DATA_BIT_WIDTH  16
+#define DATA_BIT_WIDTH  16
 
 // Max shift distance
 
@@ -329,9 +326,6 @@
 
 #define REG_DP_VM_TOGGLE  9
 
-// Debug: layer ID
-#define REG_LAYER_ID  31
-
 // Sub function for REG_DP_SRC_TEMPLATE and REG_DP_DST_TEMPLATE
 
 #define DPREG_STRIDE0  0
@@ -506,7 +500,7 @@
 
 #define FPU_SET_W_FP32   16
 
-#define FPU_SET_W_INT16  32
+#define FPU_SET_W_INT8   32
 
 #define FPU_SET_W_ZFP16  48
 

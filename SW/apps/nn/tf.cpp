@@ -25,7 +25,6 @@
 #include "../../base/types.h"
 #include "../../base/util.h"
 #include "../../base/ztalib.h"
-#include "../../src/soc.h"
 #include "tf.h"
 
 // Graph node to execute TFLITE model
@@ -84,7 +83,6 @@ ZtaStatus TfliteNn::Verify() {
    NeuralNet::LoadBegin(m_input,m_output);
 
    m_fp=fopen(m_modelName.c_str(),"rb");
-   printf("model_name: %s\n", m_modelName.c_str());
    assert(m_fp);
    fseek(m_fp, 0L, SEEK_END);
    sz = ftell(m_fp);
@@ -185,9 +183,6 @@ ZtaStatus TfliteNn::Verify() {
                int height = input.m_shape[1];
                int filter_width = filter.m_shape[2];
                int filter_height = filter.m_shape[1];
-#ifdef PRINTF_LOG_ON
-               printf("input width: %d, input height: %d; filter_width: %d, filter height: %d\n", width, height, filter_width, filter_height);
-#endif
                int out_width,out_height;
                TfliteNnPadding pad;
                pad = ComputePaddingHeightWidth(
@@ -215,10 +210,7 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     &def.output_multiplier_per_channel,
-                     &def.output_shift_per_channel,
-                     &def.u.conv.per_tensor,
-                     &def.u.conv.per_channel);
+                     0,0);
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
@@ -285,18 +277,16 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0,
-                     &def.u.conv.per_tensor,
-                     &def.u.conv.per_channel); //per-tensor quantization
+                     0,0); //per-tensor quantization
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
 #ifdef PRINTF_LOG_ON
-               if (def.u.conv.per_tensor)
-                  printf("per tensor quantization\n");
-               else
-                  printf("per channel quantization\n");
+               //if (def.u.conv.per_tensor)
+               //   printf("per tensor quantization\n");
+               //else
+               //   printf("per channel quantization\n");
                printf("multiplier: %ld, shift: %ld\n", def.u.conv.output_multiplier, def.u.conv.output_shift);
                printf("offset input: %ld, weights: %ld, output: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
 #endif
@@ -401,6 +391,22 @@ ZtaStatus TfliteNn::Verify() {
                }
                break;
                }
+            case NeuralNetOperatorPad: {
+               // output same as input
+               TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
+               def.input.push_back(op->inputs()->Get(0));
+               def.output.push_back(op->outputs()->Get(0));
+
+               def.input_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
+               def.input_type.push_back(m_tensors[op->inputs()->Get(0)].type);
+
+               //def.output_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
+               //def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
+               def.output_shape.push_back(&m_tensors[op->outputs()->Get(0)].m_shape);
+               def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
+
+               break;
+               }
             case NeuralNetOperatorAdd: {
                const tflite::AddOptions *add_params=op->builtin_options_as_AddOptions();
                TfliteNnTensorDef &input1=m_tensors[op->inputs()->Get(0)];
@@ -482,17 +488,55 @@ ZtaStatus TfliteNn::Verify() {
                               &def.u.pool_avg.activation_min,&def.u.pool_avg.activation_max);
                break;
                }
+            case NeuralNetOperatorMean: {
+               int out_height,out_width;
+               TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
+               TfliteNnTensorDef &output=m_tensors[op->outputs()->Get(0)];
+               // mean has 2 inputs, one is axis
+               // assert(op->inputs()->size()==1);
+               assert(op->outputs()->size()==1);
+               def.input.push_back(op->inputs()->Get(0));
+               def.output.push_back(op->outputs()->Get(0));
+               def.input_shape.push_back(&input.m_shape);
+               def.input_type.push_back(input.type);
+               def.output_shape.push_back(&output.m_shape);
+               def.output_type.push_back(output.type);
+               def.u.pool_avg.stride_w=1;
+               def.u.pool_avg.stride_h=1;
+               def.u.pool_avg.filter_w=input.m_shape[1];
+               def.u.pool_avg.filter_h=input.m_shape[2];
+               TfliteNnPadding pad = ComputePaddingHeightWidth(
+                        def.u.pool_avg.stride_h,def.u.pool_avg.stride_w,
+                        1,1, input.m_shape[1],input.m_shape[2],def.u.pool_avg.filter_h,
+                        def.u.pool_avg.filter_w,tflite::Padding_VALID, &out_height, &out_width);
+               def.u.pool_avg.pad_w=pad.w;
+               def.u.pool_avg.pad_h=pad.h;
+               tflite::ActivationFunctionType activation=tflite::ActivationFunctionType_NONE;
+               if (output.type == NeuralNetTensorType_UINT8) {
+                  CalculateActivationRangeUint8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.add.activation_min,
+                                             &def.u.add.activation_max);
+               } else {
+                  CalculateActivationRangeInt8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.add.activation_min,
+                                             &def.u.add.activation_max);
+               }
+               break;
+               }
+
             default:
                assert(0); // ????
          }
-
          if(!(layer=NeuralNet::CreateLayer(i,&def)))
             return ZtaStatusFail;
          if(layer->Prepare() != ZtaStatusOk)
             return ZtaStatusFail;
       }
-
+      //printf("m_operetor.size: %d\n", NeuralNet::m_operators.size());
       NeuralNet::LoadEnd();
+      //printf("m_bufLst.size: %d\n", NeuralNet::GetBufferSize());
    }
    return ZtaStatusOk;
 }

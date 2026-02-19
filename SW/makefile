@@ -14,8 +14,8 @@ PROJ_NAME=ztachip
 ###
 #######
 
-UNIT_TEST=no
-
+UNIT_TEST=yes
+PRINTF_LOG=no
 LLM_TEST=no
 
 
@@ -25,10 +25,8 @@ LLM_TEST=no
 DEBUG=no
 BENCH=no
 MULDIV=yes
+
 MAIN = src/main.cpp
-UNIT_TEST?=yes
-PRINTF_LOG=yes
-#PRINTF_LOG=no
 
 SRCS = 	base/simplelib.c \
 	base/ztalib.c \
@@ -42,8 +40,6 @@ SRCS = 	base/simplelib.c \
 	src/vision_ai.cpp \
 	src/mpy.cpp \
 	apps/main/kernels/main.m.c \
-	apps/fpga_test/kernels/test.m.c \
-	apps/fpga_test/test.cpp \
 	apps/color/kernels/color.m.c \
 	apps/color/color.cpp \
 	apps/of/kernels/of.m.c \
@@ -66,6 +62,7 @@ SRCS = 	base/simplelib.c \
 	apps/nn/nn_objdect.cpp \
 	apps/nn/nn_poolavg.cpp \
 	apps/nn/nn_reshape.cpp \
+	apps/nn/nn_pad.cpp \
 	apps/nn/nn_util.cpp \
 	apps/nn/tf.cpp \
 	apps/nn/tf_util.cpp \
@@ -84,8 +81,7 @@ SRCS = 	base/simplelib.c \
 	src/sdmm.c \
 	src/chat.cpp \
 	src/soc.cpp
-	#src/main.cpp
-  base/newlib.c
+  #base/newlib.c
 
 OBJDIR = build
 
@@ -136,12 +132,12 @@ ifeq ($(UNIT_TEST),yes)
 	CFLAGS += -DZTACHIP_UNIT_TEST
 endif
 
-ifeq ($(LLM_TEST),yes)
-	CFLAGS += -DZTACHIP_LLM_TEST
-endif
-
 ifeq ($(PRINTF_LOG),yes)
 	CFLAGS += -DPRINTF_LOG_ON
+endif
+
+ifeq ($(LLM_TEST),yes)
+	CFLAGS += -DZTACHIP_LLM_TEST
 endif
 
 CFLAGS += -I./apps/nn/flatbuffer

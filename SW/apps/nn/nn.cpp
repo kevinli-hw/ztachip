@@ -33,6 +33,7 @@
 #include "nn_objdetect.h"
 #include "nn_poolavg.h"
 #include "nn_reshape.h"
+#include "nn_pad.h"
 
 // Base class to process to process neural network
 
@@ -51,43 +52,38 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
    switch(op) {
       case NeuralNetOperatorConv2D:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
-         layer->layer_id = NeuralNetOperatorConv2D;
          break;
       case NeuralNetOperatorConvDepthWise:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionTypeDepthWise);
-         layer->layer_id = NeuralNetOperatorConvDepthWise;
-         break;
       case NeuralNetOperatorFC:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
-         layer->layer_id = NeuralNetOperatorFC;
          break;
       case NeuralNetOperatorConcatenation:
          layer=new NeuralNetLayerConcat(this,op_);
-         layer->layer_id = NeuralNetOperatorConcatenation;
          break;
       case NeuralNetOperatorLogistic:
          layer=new NeuralNetLayerLogistic(this,op_);
-         layer->layer_id = NeuralNetOperatorLogistic;
          break;
       case NeuralNetOperatorReshape:
          layer=new NeuralNetLayerReshape(this,op_);
-         layer->layer_id = NeuralNetOperatorReshape;
+         break;
+      case NeuralNetOperatorPad:
+         layer=new NeuralNetLayerPad(this,op_);
          break;
       case NeuralNetOperatorDetection:
          layer=new NeuralNetLayerObjDetect(this,op_);
-         layer->layer_id = NeuralNetOperatorDetection;
          break;
       case NeuralNetOperatorAdd:
          layer=new NeuralNetLayerAdd(this,op_);
-         layer->layer_id = NeuralNetOperatorAdd;
          break;
       case NeuralNetOperatorAvgPool2D:
          layer=new NeuralNetLayerPoolAvg(this,op_);
-         layer->layer_id = NeuralNetOperatorAvgPool2D;
+         break;
+      case NeuralNetOperatorMean:
+         layer=new NeuralNetLayerPoolAvg(this,op_);
          break;
       case NeuralNetOperatorUnknown:
          layer=0;
-         layer->layer_id = NeuralNetOperatorUnknown;
          break;
       default:
          assert(0);
@@ -106,13 +102,16 @@ ZtaStatus NeuralNet::LoadBegin(TENSOR *input,std::vector<TENSOR *> &_output) {
 
 // Model loading has been completed from derived class
 ZtaStatus NeuralNet::LoadEnd() {
+   //printf("LoadEnd start\n");
    // Assign input tensor as input data to the model
    if(AssignInputTensor(true) != ZtaStatusOk)
       return ZtaStatusFail;
 
+   //printf("AssignInputTensor\n");
    // Prune out all the passthrough layers (reshape)
    for(int i=(int)m_operators.size()-1;i >= 0;i--) {
       if(m_operators[i]->GetIoType()==LayerIoPassthrough) {
+         printf("layer passthrough, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
          int output_id=m_operators[i]->m_def.output[0];
          int input_id=m_operators[i]->m_def.input[0];
          for(int j=0;j < (int)m_operators.size();j++) {
@@ -127,9 +126,11 @@ ZtaStatus NeuralNet::LoadEnd() {
          }
       }
    }
+   //printf("Prune passthrough\n");
 
    // Assign output format type
    for(int i=0;i < (int)m_operators.size();i++) {
+      //printf("layer IO type: %d, index: %d, op->id: %d\n", m_operators[i]->GetIoType(), i, m_operators[i]->m_def.op);
       switch(m_operators[i]->GetIoType()) {
          // Check for output requirement
          case LayerIoTypeInInterleaveOutInterleave: {
@@ -171,7 +172,9 @@ ZtaStatus NeuralNet::LoadEnd() {
             }
          case LayerIoTypeInFlatOutInterleaveAndOrFlat: {
             // Input must be flat format
+            //printf("layer IO LayerIoTypeInFlatOutInterleaveAndOrFlat, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
             if(!BufferFlatPresent(m_operators[i]->m_def.input[0])) {
+               printf("buffer allocate prepare\n");
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),true,false);
             }
@@ -288,6 +291,8 @@ ZtaStatus NeuralNet::Unload() {
 
 ZtaStatus NeuralNet::AssignInputTensor(bool firstTime) {
    // Check input image is correct dimension,type and format
+   //printf("m_operators[0]->m_def.input_type[0]: %d\n", m_operators[0]->m_def.input_type[0]);
+   //printf("m_input->GetDataType(): %d\n", m_input->GetDataType());
    if(TENSOR::GetTensorSize(*m_operators[0]->m_def.input_shape[0])==TENSOR::GetTensorSize(m_input->m_dim) &&
       (m_input->GetFormat()==TensorFormatSplit) &&
       ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) ||
@@ -387,7 +392,7 @@ ZtaStatus NeuralNet::Verify() {
 ZtaStatus NeuralNet::Execute(int queue,int stepMode)
 {
    ZtaStatus rc;
-   int32_t startTime, endTime;
+   int32_t startTime;
 
    startTime=(int32_t)TimeGet();
    if(m_runningStep < 0) {
@@ -395,13 +400,12 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
       AssignInputTensor(false);
       AssignOutputTensors(false);
    }
-   //printf("stepmode: %d, operator size: %d\n", stepMode, (int)m_operators.size());
    while(m_runningStep < (int)m_operators.size()) {
       if(m_operators[m_runningStep]->RunAtHost()) {
          if(!GraphNode::AllRequestAreCompleted(queue))
             return ZtaStatusPending;
       }
-      ZTAM_GREG(0,REG_LAYER_ID,0)=m_operators[m_runningStep]->layer_id; // every layer id
+      //printf("current layer: %d, op_code: %d\n", m_operators[m_runningStep]->m_def.index, m_operators[m_runningStep]->m_def.op);
       rc=m_operators[m_runningStep]->Evaluate(queue);
       if(rc==ZtaStatusPending)
          return rc;
@@ -415,9 +419,6 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
    }
    if(m_runningStep >= (int)m_operators.size()) {
       m_runningStep=-1;
-      //endTime = (int32_t)TimeGet();
-      //printf("current task time: %ld\n", endTime-startTime);
-      ZTAM_GREG(0,REG_LAYER_ID,0)=0; // end
       return ZtaStatusOk; // Scheduling is done
    } else {
       return ZtaStatusPending;

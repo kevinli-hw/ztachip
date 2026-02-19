@@ -16,11 +16,9 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
-#include <stdio.h>
 #include <stdbool.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
-#include "../../../../SW/src/soc.h"
 #include "fcn.h"
 #include "fcn.p.img"
 
@@ -55,10 +53,10 @@ static void innerProduct(void *_p,int pid) {
    int coeftopcnt;
    int dx2;
    int index2;
-   //int topfmt=UINT8;
-   //int botfmt=UINT8;
-   //int biasfmt=INT16;
-   //int weightfmt=UINT8;
+ //  int topfmt=UINT8;
+ //  int botfmt=UINT8;
+ //  int biasfmt=INT16;
+ //  int weightfmt=UINT8;
    int topfmt=INT8;
    int botfmt=INT8;
    int biasfmt=INT16;
@@ -67,14 +65,14 @@ static void innerProduct(void *_p,int pid) {
    nthread=req->num_thread;
    coeftopcnt=req->coeftopcnt*IP_CHUNK_SIZE;
    dx2=req->dx*IP_CHUNK_SIZE;
-   APB[APB_LED]=0x00000001;
+
    > DTYPE(INT16)PCORE(NUM_PCORE)[*][0:nthread-1].inner_product::init._out_scale <= INT16(req->top_scale);
    > EXE_LOCKSTEP(inner_product::init,NUM_PCORE,nthread);
    ztaTaskYield();
    for(i=(pid==0)?0:req->dx;i < req->topcnt;i += 2*req->dx) {
       index2=i*IP_CHUNK_SIZE;
       npcore=req->num_pcore;
-      
+
       > DTYPE(biasfmt)PCORE(npcore)[:][0:nthread-1].inner_product::biasHi[:] <= DTYPE(biasfmt)MEM(req->biasHi,req->topcnt)[i:i+req->dx-1];
       > DTYPE(biasfmt)PCORE(npcore)[:][0:nthread-1].inner_product::biasLo[:] <= DTYPE(biasfmt)MEM(req->biasLo,req->topcnt)[i:i+req->dx-1];
       > EXE_LOCKSTEP(inner_product::start,npcore,nthread);

@@ -3,6 +3,7 @@ PROJ_NAME=ztachip_sim
 DEBUG=no
 BENCH=no
 MULDIV=yes
+PRINTF_LOG=no
 
 SRCS = 	base/simplelib.c \
 	base/ztalib.c \
@@ -28,6 +29,8 @@ SRCS = 	base/simplelib.c \
 	base/task.S \
 	apps/main/kernels/main.m.c \
 	apps/test/kernels/test.m.c \
+	thirdparty/FatFs/ff.c \
+	src/sdmm.c \
 	sim/test_fc.cpp
 
 OBJDIR = build
@@ -75,8 +78,11 @@ endif
 ifeq ($(BENCH),yes)
 	CFLAGS += -fno-inline
 endif
+ifeq ($(PRINTF_LOG),yes)
+	CFLAGS += -DPRINTF_LOG_ON
+endif
 
-CFLAGS += -DSIMULATION
+
 
 ifeq ($(SIFIVE_GCC_PACK),yes)
 	RISCV_CLIB=$(RISCV_PATH)/$(RISCV_NAME)/lib/$(MARCH)/$(MABI)/
@@ -87,6 +93,7 @@ endif
 RISCV_OBJCOPY = $(RISCV_PATH)/bin/$(RISCV_NAME)-objcopy
 RISCV_OBJDUMP = $(RISCV_PATH)/bin/$(RISCV_NAME)-objdump
 RISCV_CC=$(RISCV_PATH)/bin/$(RISCV_NAME)-gcc
+RISCV_AR=$(RISCV_PATH)/bin/$(RISCV_NAME)-ar
 
 CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing
 LDFLAGS +=  -nostdlib -lgcc -lc -lm -lstdc++ -lgcc -lc -lgcc -mcmodel=medany -nostartfiles -ffreestanding -Wl,-Bstatic,-T,$(LDSCRIPT),-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
@@ -98,10 +105,17 @@ OBJS := $(OBJS:.S=.o)
 OBJS := $(OBJS:..=miaou)
 OBJS := $(addprefix $(OBJDIR)/,$(OBJS))
 
+MAIN_OBJ := $(MAIN)
+MAIN_OBJ := $(MAIN_OBJ:.c=.o)
+MAIN_OBJ := $(MAIN_OBJ:.cpp=.o)
+MAIN_OBJ := $(addprefix $(OBJDIR)/,$(MAIN_OBJ))
 
-all: $(OBJDIR)/$(PROJ_NAME).elf $(OBJDIR)/$(PROJ_NAME).hex $(OBJDIR)/$(PROJ_NAME).asm $(OBJDIR)/$(PROJ_NAME).v
+all: $(OBJDIR)/$(PROJ_NAME).elf $(OBJDIR)/$(PROJ_NAME).hex $(OBJDIR)/$(PROJ_NAME).asm $(OBJDIR)/$(PROJ_NAME).v $(OBJDIR)/libzta.a
 
-$(OBJDIR)/%.elf: $(OBJS) | $(OBJDIR)
+$(OBJDIR)/libzta.a: $(OBJS) | $(OBJDIR)
+	$(RISCV_AR) rcs $@ $^
+
+$(OBJDIR)/%.elf: $(OBJS) $(MAIN_OBJ) | $(OBJDIR)
 	$(RISCV_CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBSINC) $(LIBS)
 
 %.hex: %.elf

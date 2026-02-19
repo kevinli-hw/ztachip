@@ -43,18 +43,37 @@ ZtaStatus NeuralNetLayerPoolAvg::Prepare() {
 ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
    NeuralNetOperatorDef *op=&m_def;
    bool interleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
-   kernel_Pooling_exe(
-      (unsigned int)GetJobId(queue),
-      (unsigned int)(interleave?m_nn->BufferGetInterleave(op->input[0]):m_nn->BufferGetFlat(op->input[0])),
-	  (unsigned int)(interleave?m_nn->BufferGetInterleave(op->output[0]):m_nn->BufferGetFlat(op->output[0])),
-      op->u.pool_avg.filter_w,
-      op->u.pool_avg.stride_w,
-      (*op->output_shape[0])[3],
-      (*op->output_shape[0])[2],
-      (*op->input_shape[0])[3],
-      (*op->input_shape[0])[2],
-	  (unsigned int)m_shmSpu,
-      m_outputShift);
+   if (op->op == NeuralNetOperatorAvgPool2D)
+   {
+       kernel_Pooling_exe(
+          (unsigned int)GetJobId(queue),
+          (unsigned int)(interleave?m_nn->BufferGetInterleave(op->input[0]):m_nn->BufferGetFlat(op->input[0])),
+	      (unsigned int)(interleave?m_nn->BufferGetInterleave(op->output[0]):m_nn->BufferGetFlat(op->output[0])),
+          op->u.pool_avg.filter_w,
+          op->u.pool_avg.stride_w,
+          (*op->output_shape[0])[3],
+          (*op->output_shape[0])[2],
+          (*op->input_shape[0])[3],
+          (*op->input_shape[0])[2],
+	      (unsigned int)m_shmSpu,
+          m_outputShift);
+   }else if (op->op == NeuralNetOperatorMean)
+   {
+       kernel_Pooling_exe(
+          (unsigned int)GetJobId(queue),
+          (unsigned int)(interleave?m_nn->BufferGetInterleave(op->input[0]):m_nn->BufferGetFlat(op->input[0])),
+	      (unsigned int)(interleave?m_nn->BufferGetInterleave(op->output[0]):m_nn->BufferGetFlat(op->output[0])),
+          op->u.pool_avg.filter_w,
+          op->u.pool_avg.stride_w,
+          (*op->output_shape[0])[1],
+          1,
+          (*op->input_shape[0])[3],
+          (*op->input_shape[0])[2],
+	      (unsigned int)m_shmSpu,
+          m_outputShift);
+   }else{
+       assert(0);
+   }
    return ZtaStatusOk;
 }
 
@@ -93,5 +112,5 @@ int16_t NeuralNetLayerPoolAvg::SpuAvgPool(int16_t _in,void *pparm,uint32_t parm,
    } else {
       return FLOAT2INT(_in2);
    }
-}  
+}
 

@@ -83,9 +83,9 @@ uint32_t ztaBuildKernelFunc(uint32_t _func,int num_pcore,int num_tid) {
 
 ZTA_SHARED_MEM ztaAllocSharedMem(int _size) {
    uint32_t p,p2;
-   // We lose up to 8 bytes to align to 64-bit boundary and lose
+   // We lose up to 8 bytes to align to 64-bit boundary and lose 
    // another 8 bytes for header
-   _size += 16;
+   _size += 16; 
 	p=(uint32_t)malloc(_size);
    p2 = ((p+7)/8)*8; // Round to neareset 64-bit boundary
    ((uint32_t *)(p2))[0]=p;
@@ -143,7 +143,6 @@ ZTA_SHARED_MEM ztaBuildSpuBundle(int numSpuImg,...) {
    pp[0]=numSpuImg;
    pp++;
    for(i=0;i < numSpuImg;i++,pp+=SPU_SIZE*2) {
-    printf("func: %d\n", i);
 	  func = va_arg(args,SPU_FUNC);
 	  pparm = va_arg(args,void *);
 	  parm = va_arg(args,uint32_t);

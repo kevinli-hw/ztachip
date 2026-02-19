@@ -66,7 +66,7 @@ void kernel_ref_llm_matmul_q4_exe(
    int N, // Dimension of _x and _w
    int D, // Result dimension _y
    int GS, // Quantized group
-   int16_t *x_v, // x value vector with dimention Nx1
+   uint8_t *x_v, // x value vector with dimention Nx1
    float16_t *x_s, // x scaling vector with dimension (N/QS)x1
    uint8_t *w_v, // w value vector with dimension DxN
    float16_t *w_s, // w scaling vector with dimension Dx(N/QS)
@@ -103,8 +103,8 @@ void kernel_ref_llm_matmul_q4_exe(
                 hi = (hi & 0x8)?(hi|0xF0):hi;
                 lo = (w_v[WV(i*N/2+(j+k)/2,sz,sz2,reshape)] & 0x0F);
                 lo = (lo & 0x8)?(lo|0xF0):lo;
-                sum += ((int32_t)((int8_t)lo))*((int32_t)((int16_t)x_v[j+k]));
-                sum += ((int32_t)((int8_t)hi))*((int32_t)((int16_t)x_v[j+k+1]));
+                sum += ((int32_t)((int8_t)lo))*((int32_t)((int8_t)x_v[j+k]));
+                sum += ((int32_t)((int8_t)hi))*((int32_t)((int8_t)x_v[j+k+1]));
             }
             sumf = BF2F(F2BF((float)sum));
             r += BF2F(x_s[b])*BF2F(w_s[WS(i*N2+b,N2,D)])*sumf;
@@ -143,7 +143,7 @@ void kernel_ref_llm_matmul_q8_exe(
    int N, // Dimension of _x and _w
    int D, // Result dimension _y
    int GS, // Quantized group
-   int16_t *x_v, // x value vector with dimention Nx1
+   uint8_t *x_v, // x value vector with dimention Nx1
    float16_t *x_s, // x scaling vector with dimension (N/QS)x1
    uint8_t *w_v, // w value vector with dimension DxN
    float16_t *w_s, // w scaling vector with dimension Dx(N/QS)
@@ -178,8 +178,8 @@ void kernel_ref_llm_matmul_q8_exe(
             for(uint32_t k=0;k < GS_DEFAULT;k+=2) {
                 lo = w_v[WV2(i*N+(j+k),sz,sz2,reshape)];
                 hi = w_v[WV2(i*N+(j+k+1),sz,sz2,reshape)];
-                sum += ((int32_t)((int8_t)lo))*((int32_t)((int16_t)x_v[j+k]));
-                sum += ((int32_t)((int8_t)hi))*((int32_t)((int16_t)x_v[j+k+1]));
+                sum += ((int32_t)((int8_t)lo))*((int32_t)((int8_t)x_v[j+k]));
+                sum += ((int32_t)((int8_t)hi))*((int32_t)((int8_t)x_v[j+k+1]));
             }
             sumf = BF2F(F2BF((float)sum));
             r += BF2F(x_s[b])*BF2F(w_s[WS2(i*N2+b,N2,D)])*sumf;
@@ -194,9 +194,8 @@ void kernel_ref_llm_matmul_q8_exe(
 // This function is used to quantize activation before the matmul operation
 //--------------------------------------------------------------------------
 
-void kernel_ref_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,int16_t *q) {
+void kernel_ref_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *q) {
     int num_groups = N / GS_DEFAULT;
-//    float Q_MAX = 32767.0f;
     float Q_MAX = 127.0f;
 
     for (int group = 0; group < num_groups; group++) {
@@ -216,11 +215,11 @@ void kernel_ref_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,int16
         for (int i = 0; i < GS_DEFAULT; i++) {
             float quant_value = BF2F(x[group * GS_DEFAULT + i]) / scale;
             int quantized = (int)(quant_value); 
-            if(quantized > 32767)
-                quantized = 32767;
-            if(quantized < -32767)
-                quantized = -32767;
-            q[group * GS_DEFAULT + i] = (int16_t)quantized;
+            if(quantized > 127)
+                quantized = 127;
+            if(quantized < -128)
+                quantized = -128;
+            q[group * GS_DEFAULT + i] = (int8_t)quantized;
         }
     }
 }
@@ -416,9 +415,4 @@ int kernel_ref_llm_find_max(float16_t *x,uint32_t N) {
             max = i;
     }
     return max;
-}
-
-// Not implemented yet...
-int kernel_ref_llm_find_k_max(float16_t* x, uint32_t _N, int K, int* top, float* topp) {
-    return 0;
 }

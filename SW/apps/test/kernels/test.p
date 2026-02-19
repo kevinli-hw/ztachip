@@ -21,7 +21,7 @@
 vint16 test::_A;
 vint16 test::_Z;
 
-_kernel_ void test::div() { 
+_kernel_ void test::add() { 
    _VMASK=-1;
-   _Z=_A/2;
+   _Z=_A+1;
 }

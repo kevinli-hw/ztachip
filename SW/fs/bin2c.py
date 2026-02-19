@@ -141,6 +141,9 @@ write_c_array("single_fc_int8", raw_data)
 raw_data = read_file("mobilenet_v2_int8.tflite")
 write_c_array("mobilenet_v2_int8", raw_data)
 
+raw_data = read_file("mobilenet_v2_int8_bs1.tflite")
+write_c_array("mobilenet_v2_int8_bs1", raw_data)
+
 raw_data = read_file("classifier.bin")
 write_c_array("classifier", raw_data)
 
