@@ -111,7 +111,7 @@ ZtaStatus NeuralNet::LoadEnd() {
    // Prune out all the passthrough layers (reshape)
    for(int i=(int)m_operators.size()-1;i >= 0;i--) {
       if(m_operators[i]->GetIoType()==LayerIoPassthrough) {
-         printf("layer passthrough, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
+         //printf("layer passthrough, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
          int output_id=m_operators[i]->m_def.output[0];
          int input_id=m_operators[i]->m_def.input[0];
          for(int j=0;j < (int)m_operators.size();j++) {
@@ -174,7 +174,7 @@ ZtaStatus NeuralNet::LoadEnd() {
             // Input must be flat format
             //printf("layer IO LayerIoTypeInFlatOutInterleaveAndOrFlat, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
             if(!BufferFlatPresent(m_operators[i]->m_def.input[0])) {
-               printf("buffer allocate prepare\n");
+               //printf("buffer allocate prepare\n");
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),true,false);
             }
