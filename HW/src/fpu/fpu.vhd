@@ -109,9 +109,11 @@ record
     X:fp32_t;
     Y:fp32_t;
     A_precision:unsigned(2 downto 0);
+    A_int:std_logic;
     A_floor:std_logic;
     A_abs:std_logic;
     B_precision:unsigned(2 downto 0);
+    B_int:std_logic;
     X_double:std_logic;
     Y_double:std_logic;
     C_double:std_logic;
@@ -154,9 +156,11 @@ constant fpu_instruction_len_c:integer:=fpu_instruction_r.opcode'length+
                                         fpu_instruction_r.X'length+ --fpu_instruction_r.X'length
                                         fpu_instruction_r.Y'length+ --fpu_instruction_r.Y'length  
                                         fpu_instruction_r.A_precision'length+ --fpu_instruction_r.A_precision'length
+                                        1+ --fpu_instruction_r.A_int
                                         1+ --fpu_instruction_r.A_floor
                                         1+ --fpu_instruction_r.A_abs
                                         fpu_instruction_r.B_precision'length+ --fpu_instruction_r.B_precision
+                                        1+ -- fpu_instruction_r.B_int
                                         1+ --fpu_instruction_r.X_double
                                         1+ --fpu_instruction_r.Y_double
                                         1+ --fpu_instruction_r.C_double
@@ -231,12 +235,16 @@ begin
     len_v := len_v + rec_v.Y'length;
     rec_v.A_precision := unsigned(q_in(q_in'length-len_v-1 downto q_in'length-len_v-rec_v.A_precision'length));
     len_v := len_v + rec_v.A_precision'length;
+    rec_v.A_int := q_in(q_in'length-len_v-1);
+    len_v := len_v + 1;
     rec_v.A_floor := q_in(q_in'length-len_v-1);
     len_v := len_v + 1;
     rec_v.A_abs := q_in(q_in'length-len_v-1);
     len_v := len_v + 1;
     rec_v.B_precision := unsigned(q_in(q_in'length-len_v-1 downto q_in'length-len_v-rec_v.B_precision'length));
     len_v := len_v + rec_v.B_precision'length;
+    rec_v.B_int := q_in(q_in'length-len_v-1);
+    len_v := len_v + 1;
     rec_v.X_double := q_in(q_in'length-len_v-1);
     len_v := len_v + 1;
     rec_v.Y_double := q_in(q_in'length-len_v-1);
@@ -322,12 +330,16 @@ begin
    len_v := len_v + rec_in.Y'length;
    q_v(q_v'length-len_v-1 downto q_v'length-len_v-rec_in.A_precision'length) := std_logic_vector(rec_in.A_precision);
    len_v := len_v + rec_in.A_precision'length;
+   q_v(q_v'length-len_v-1) := rec_in.A_int;
+   len_v := len_v + 1;
    q_v(q_v'length-len_v-1) := floor_in;
    len_v := len_v + 1;
    q_v(q_v'length-len_v-1) := abs_in;
    len_v := len_v + 1;
    q_v(q_v'length-len_v-1 downto q_v'length-len_v-rec_in.B_precision'length) := std_logic_vector(rec_in.B_precision);
    len_v := len_v + rec_in.B_precision'length;
+   q_v(q_v'length-len_v-1) := rec_in.B_int;
+   len_v := len_v + 1;
    q_v(q_v'length-len_v-1) := rec_in.X_double;
    len_v := len_v + 1;
    q_v(q_v'length-len_v-1) := rec_in.Y_double;
@@ -364,10 +376,7 @@ begin
       else
          float_v(31) := int_in(15);
          float_v(30 downto 0) := (others=>'0');
-         if mantissa_v(11) = '1' then
-            float_v(22 downto 12) := mantissa_v(10 downto 0);
-            float_v(30 downto 23) := std_logic_vector(to_unsigned(138,8));
-         elsif mantissa_v(10) = '1' then
+         if mantissa_v(10) = '1' then
             float_v(22 downto 13) := mantissa_v(9 downto 0);
             float_v(30 downto 23) := std_logic_vector(to_unsigned(137,8));
          elsif mantissa_v(9) = '1' then
@@ -572,21 +581,25 @@ signal write_flush_r:std_logic;
 
 signal fpu_exe_pending_r:std_logic_vector(1 downto 0);
 
+signal fpu_busy_vm_r:std_logic_vector(1 downto 0);
+
+signal full:std_logic;
+
 BEGIN
+
+full <= cmd_fifo_full(0) or cmd_fifo_full(1);
 
 fpu_exe_out <= exe;
 
 busy <= (busy_r or busy_rr or fpu_exe_r or fpu_exe_rr);
 
-fpu_busy_vm_out(0) <= (busy and (not fpu_vm_r)) or fpu_exe_pending_r(0);
-
-fpu_busy_vm_out(1) <= (busy and (fpu_vm_r)) or fpu_exe_pending_r(1);
+fpu_busy_vm_out <= fpu_busy_vm_r;
 
 bus_readdata_out <= rresp_r when rden_r='1' else (others=>'Z');
 
 bus_readdatavalid_out <= rden_r;
 
-bus_writewait_out <= '1' when (bus_write_in='1' and cmd_fifo_we="00" and wregno=to_unsigned(register_fpu_exe_c,register_t'length)) else '0';
+bus_writewait_out <= '1' when (bus_write_in='1' and full='1' and wregno=to_unsigned(register_fpu_exe_c,register_t'length)) else '0';
 
 bus_readwait_out <= '0';
 
@@ -714,6 +727,7 @@ falu_core_i : falu_core
         input_fast_in => fpu_instruction_r.FAST,
         A_addr => fpu_instruction_r.A_addr,
         A_precision => fpu_instruction_r.A_precision,
+        A_int => fpu_instruction_r.A_int,
         A_floor => fpu_instruction_r.A_floor,
         A_abs => fpu_instruction_r.A_abs,
         B_in => exe_b,
@@ -831,7 +845,7 @@ Y_fifo_i:scfifo
 
 -- Command FIFO 
 
-process(fpu_next_instruction_r,bus_writedata_in,wregno2,bus_write_in,wregno,cmd_fifo_full,
+process(fpu_next_instruction_r,bus_writedata_in,wregno2,bus_write_in,wregno,full,
         fpu_vm_r,ready,cmd_fifo_empty,halt_r,cmd_fifo_reads)
 begin
 if(vm_r='0') then
@@ -841,7 +855,7 @@ if(vm_r='0') then
                                         wregno2(fpu_opcode_t'length+1) --abs
                                         );
 
-    if(bus_write_in='1' and wregno=to_unsigned(register_fpu_exe_c,register_t'length) and cmd_fifo_full(0)='0') then
+    if(bus_write_in='1' and wregno=to_unsigned(register_fpu_exe_c,register_t'length) and full='0') then
         cmd_fifo_we(0) <= '1';
     else 
         cmd_fifo_we(0) <= '0'; 
@@ -858,7 +872,7 @@ else
                                         wregno2(fpu_opcode_t'length), --floor
                                         wregno2(fpu_opcode_t'length+1) --abs
                                         );
-    if(bus_write_in='1' and wregno=to_unsigned(register_fpu_exe_c,register_t'length) and cmd_fifo_full(1)='0') then
+    if(bus_write_in='1' and wregno=to_unsigned(register_fpu_exe_c,register_t'length) and full='0') then
         cmd_fifo_we(1) <= '1';
     else
         cmd_fifo_we(1) <= '0';
@@ -977,20 +991,40 @@ begin
 if(fpu_instruction_r.B_enable='1') then
     if(fpu_instruction_r.B_by_value='0') then
         if(fpu_instruction_r.B_precision=to_unsigned(2,fpu_instruction_r.B_precision'length)) then
-            -- Input is FP16
-            step_v := (others=>'0');
-            step_v(1 downto 0) := step_r(1 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 1));
-            case step_v(1 downto 0) is
-                when "00" =>
-                    exe_b <= B(15 downto 0) & "0000000000000000";
-                when "01" =>
-                    exe_b <= B(31 downto 16) & "0000000000000000";
-                when "10" =>
-                    exe_b <= B(47 downto 32) & "0000000000000000";
-                when others =>
-                    exe_b <= B(63 downto 48) & "0000000000000000";
-            end case;
-        elsif(fpu_instruction_r.B_precision=to_unsigned(4,fpu_instruction_r.B_precision'length)) then
+            if(fpu_instruction_r.B_int='0') then
+                -- Input is FP16
+                step_v := (others=>'0');
+                step_v(1 downto 0) := step_r(1 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 1));
+                case step_v(1 downto 0) is
+                    when "00" =>
+                        exe_b <= B(15 downto 0) & "0000000000000000";
+                    when "01" =>
+                        exe_b <= B(31 downto 16) & "0000000000000000";
+                    when "10" =>
+                        exe_b <= B(47 downto 32) & "0000000000000000";
+                    when others =>
+                        exe_b <= B(63 downto 48) & "0000000000000000";
+                end case;
+            else
+                -- Input is INT16
+                step_v := (others=>'0');
+                step_v(1 downto 0) := step_r(1 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 1));
+                case step_v(1 downto 0) is
+                    when "00" =>
+                        exe_b(15 downto 0) <= B(15 downto 0);
+                        exe_b(31 downto 16) <= (others=>B(15));
+                    when "01" =>
+                        exe_b(15 downto 0) <= B(31 downto 16);
+                        exe_b(31 downto 16) <= (others=>B(31));
+                    when "10" =>
+                        exe_b(15 downto 0) <= B(47 downto 32);
+                        exe_b(31 downto 16) <= (others=>B(47));
+                    when others =>
+                        exe_b(15 downto 0) <= B(63 downto 48);
+                        exe_b(31 downto 16) <= (others=>B(63));
+                end case;
+            end if;
+        else
             -- Input is FP32
             step_v := (others=>'0');
             step_v(0 downto 0) := step_r(0 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 2));
@@ -999,36 +1033,6 @@ if(fpu_instruction_r.B_enable='1') then
                     exe_b <= B(31 downto 0);
                 when others =>
                     exe_b <= B(63 downto 32);
-            end case;
-        else
-            -- Input is INT8
-            step_v := (others=>'0');
-            step_v(2 downto 0) := step_r(2 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 0));
-            case step_v(2 downto 0) is
-                when "000" =>
-                    exe_b(7 downto 0) <= B(7 downto 0);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(7));
-                when "001" =>
-                    exe_b(7 downto 0) <= B(15 downto 8);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(15));
-                when "010" =>
-                    exe_b(7 downto 0) <= B(23 downto 16);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(23));
-                when "011" =>
-                    exe_b(7 downto 0) <= B(31 downto 24);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(31));
-                when "100" =>
-                    exe_b(7 downto 0) <= B(39 downto 32);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(39));
-                when "101" =>
-                    exe_b(7 downto 0) <= B(47 downto 40);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(47));
-                when "110" =>
-                    exe_b(7 downto 0) <= B(55 downto 48);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(55));
-                when others =>
-                    exe_b(7 downto 0) <= B(63 downto 56);
-                    exe_b(exe_b'length-1 downto 8) <= (others=>B(63));
             end case;
         end if;
     else
@@ -1232,16 +1236,8 @@ if(exe='1') then
             Y_rdreq <= fpu_instruction_r.Y_enable and (not fpu_instruction_r.Y_by_value);
         end if;
     end if;
-    if(fpu_instruction_r.B_precision=to_unsigned(1,fpu_instruction_r.B_precision'length)) then
-        -- This is case of INT8
-        step_v := (others=>'0');
-        step_v(2 downto 0) := step_r(2 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 0));
-        if(step_v(2 downto 0)="111") then
-            -- Every 2th step, we fetch new B parameter
-            B_rdreq <= fpu_instruction_r.B_enable and (not fpu_instruction_r.B_by_value);
-        end if;
-    elsif(fpu_instruction_r.B_precision=to_unsigned(2,fpu_instruction_r.B_precision'length)) then
-        -- This is case of FP16
+    if(fpu_instruction_r.B_precision=to_unsigned(2,fpu_instruction_r.B_precision'length)) then
+        -- This is case of FP16 or INT16
         step_v := (others=>'0');
         step_v(1 downto 0) := step_r(1 downto 0)+unsigned(fpu_instruction_r.B_addr(2 downto 1));
         if(step_v(1 downto 0)="11") then
@@ -1299,7 +1295,7 @@ begin
             -- precision is FP16
             fp16_v := fpu_writedata(31 downto 16);
             fp16_max_v := (others=>'1');
-            if(fpu_writedata(15)='1' and fp16_v /= fp16_max_v) then
+            if(fpu_writedata(15)='1' and unsigned(fpu_writedata(22 downto 16)) /= "1111111") then
                 fp16_v := std_logic_vector(unsigned(fp16_v) + to_unsigned(1,fp16_v'length));
             end if;
             case fpu_wr_addr(2 downto 1) is
@@ -1374,6 +1370,10 @@ begin
 end process;
 
 process(clock_in,reset_in)
+variable busy_v:std_logic;
+variable fpu_exe_v:std_logic;
+variable fpu_vm_v:std_logic;
+variable fpu_exe_pending_v:std_logic_vector(1 downto 0);
 begin
     if reset_in = '0' then
         halt_r <= '1';
@@ -1408,9 +1408,11 @@ begin
         fpu_instruction_r.X <= (others=>'0');
         fpu_instruction_r.Y <= (others=>'0');
         fpu_instruction_r.A_precision <= (others=>'0');
+        fpu_instruction_r.A_int <= '0';
         fpu_instruction_r.A_floor <= '0';
         fpu_instruction_r.A_abs <= '0';
         fpu_instruction_r.B_precision <= (others=>'0');
+        fpu_instruction_r.B_int <= '0';
         fpu_instruction_r.X_double <= '0';
         fpu_instruction_r.Y_double <= '0';
         fpu_instruction_r.C_double <= '0';
@@ -1446,9 +1448,11 @@ begin
         fpu_next_instruction_r.X <= (others=>'0');  
         fpu_next_instruction_r.Y <= (others=>'0'); 
         fpu_next_instruction_r.A_precision <= (others=>'0');
+        fpu_next_instruction_r.A_int <= '0';
         fpu_next_instruction_r.A_floor <= '0';
         fpu_next_instruction_r.A_abs <= '0';
         fpu_next_instruction_r.B_precision <= (others=>'0'); 
+        fpu_next_instruction_r.B_int <= '0';
         fpu_next_instruction_r.X_double <= '0';
         fpu_next_instruction_r.Y_double <= '0';
         fpu_next_instruction_r.C_double <= '0';
@@ -1481,8 +1485,15 @@ begin
         page_vm1_r <= (others=>'0');
         write_flush_r <= '0';
         fpu_exe_pending_r <= (others=>'0');
+        fpu_busy_vm_r <= (others=>'0');
     else
         if clock_in'event and clock_in='1' then
+
+            busy_v := busy_r;
+            fpu_exe_v := fpu_exe_r;
+            fpu_vm_v := fpu_vm_r;
+            fpu_exe_pending_v := fpu_exe_pending_r;
+
             fpu_readdatavalid_r <= fpu_readdatavalid_in;
             fpu_readdatavalid_rr <= fpu_readdatavalid_r;
             halt_r <= halt;
@@ -1494,7 +1505,6 @@ begin
             sram_write_r <= sram_write;
             sram_writedata_r <= sram_writedata;
             sram_writebe_r <= sram_writebe;
-            busy_rr <= busy_r;
 
             -- Latch in write request so to combine with next write
             -- requests
@@ -1556,41 +1566,40 @@ begin
 
             if(fpu_exe_in='1') then
                 if(fpu_exe_vm_in='0') then
-                  fpu_exe_pending_r(0) <= '1'; 
+                  fpu_exe_pending_v(0) := '1'; 
                 else
-                  fpu_exe_pending_r(1) <= '1'; 
+                  fpu_exe_pending_v(1) := '1'; 
                 end if;
             end if;
             if(busy='0') then
                 if(fpu_vm_r='0') then
                     if(fpu_exe_pending_r(1)='1') then
-                        fpu_exe_r <= '1';
-                        fpu_vm_r <= '1';
-                        fpu_exe_pending_r(1) <= '0'; 
+                        fpu_exe_v := '1';
+                        fpu_vm_v := '1';
+                        fpu_exe_pending_v(1) := '0'; 
                     elsif(fpu_exe_pending_r(0)='1') then
-                        fpu_exe_r <= '1';
-                        fpu_vm_r <= '0';
-                        fpu_exe_pending_r(0) <= '0'; 
+                        fpu_exe_v := '1';
+                        fpu_vm_v := '0';
+                        fpu_exe_pending_v(0) := '0'; 
                     else
-                        fpu_exe_r <= '0';
+                        fpu_exe_v := '0';
                     end if;
                 else
                     if(fpu_exe_pending_r(0)='1') then
-                        fpu_exe_r <= '1';
-                        fpu_vm_r <= '0';
-                        fpu_exe_pending_r(0) <= '0'; 
+                        fpu_exe_v := '1';
+                        fpu_vm_v := '0';
+                        fpu_exe_pending_v(0) := '0'; 
                     elsif(fpu_exe_pending_r(1)='1') then
-                        fpu_exe_r <= '1';
-                        fpu_vm_r <= '1';
-                        fpu_exe_pending_r(1) <= '0'; 
+                        fpu_exe_v := '1';
+                        fpu_vm_v := '1';
+                        fpu_exe_pending_v(1) := '0'; 
                     else
-                        fpu_exe_r <= '0';
+                        fpu_exe_v := '0';
                     end if;
                 end if;
             else
-                fpu_exe_r <= '0';     
+                fpu_exe_v := '0';     
             end if;
-            fpu_exe_rr <= fpu_exe_r;
             if(bus_write_in='1') then
                 if wregno=register_vm_toggle_c then
                     vm_r <= not vm_r;
@@ -1608,12 +1617,16 @@ begin
                         fpu_next_instruction_r.A_addr <= page_vm;
                         if(fpu_set_W=register2_fpu_set_W_FP32) then
                             fpu_next_instruction_r.A_precision <= to_unsigned(4,fpu_next_instruction_r.A_precision'length); --FP32
+                            fpu_next_instruction_r.A_int <= '0';            
                         elsif(fpu_set_W=register2_fpu_set_W_FP16 or fpu_set_W=register2_fpu_set_W_ZFP16) then
                             fpu_next_instruction_r.A_precision <= to_unsigned(2,fpu_next_instruction_r.A_precision'length); --FP16
-                        elsif(fpu_set_W=register2_fpu_set_W_INT8) then
-                            fpu_next_instruction_r.A_precision <= to_unsigned(1,fpu_next_instruction_r.A_precision'length); -- INT8
+                            fpu_next_instruction_r.A_int <= '0';  
+                        elsif(fpu_set_W=register2_fpu_set_W_INT16) then
+                            fpu_next_instruction_r.A_precision <= to_unsigned(2,fpu_next_instruction_r.A_precision'length); -- INT8
+                            fpu_next_instruction_r.A_int <= '1';  
                         else
                             fpu_next_instruction_r.A_precision <= to_unsigned(0,fpu_next_instruction_r.A_precision'length); -- ???
+                            fpu_next_instruction_r.A_int <= '0';  
                         end if;
                     elsif(fpu_set_P=register2_fpu_set_P_B) then
                         if(fpu_set_M=register2_fpu_set_M_VALUE) then
@@ -1631,12 +1644,15 @@ begin
                             fpu_next_instruction_r.B <= (others=>'0');
                             fpu_next_instruction_r.B_by_value <= '0';
                         end if;
-                        if(fpu_set_W=register2_fpu_set_W_INT8) then
-                            fpu_next_instruction_r.B_precision <= to_unsigned(1,fpu_next_instruction_r.B_precision'length);                    
+                        if(fpu_set_W=register2_fpu_set_W_INT16) then
+                            fpu_next_instruction_r.B_precision <= to_unsigned(2,fpu_next_instruction_r.B_precision'length);                    
+                            fpu_next_instruction_r.B_int <= '1';
                         elsif(fpu_set_W=register2_fpu_set_W_FP16 or fpu_set_W=register2_fpu_set_W_ZFP16) then
                             fpu_next_instruction_r.B_precision <= to_unsigned(2,fpu_next_instruction_r.B_precision'length);
+                            fpu_next_instruction_r.B_int <= '0';
                         else
                             fpu_next_instruction_r.B_precision <= to_unsigned(4,fpu_next_instruction_r.B_precision'length);
+                            fpu_next_instruction_r.B_int <= '0';
                         end if;
                         fpu_next_instruction_r.B_enable <= '1';
                     elsif(fpu_set_P=register2_fpu_set_P_C) then
@@ -1745,7 +1761,7 @@ begin
 
             if(cmd_fifo_rd/="00") then
                 running_r <= '1';
-                busy_r <= '1';
+                busy_v := '1';
                 step_r <= (others=>'0');
                 fpu_instruction_r <= fpu_instruction;
             end if;
@@ -1766,7 +1782,7 @@ begin
             end if;
 
             if(fpu_write='1' and fpu_eof='1' and fpu_last='1') then
-                busy_r <= '0';
+                busy_v := '0';
             end if;
 
             ------
@@ -1785,8 +1801,16 @@ begin
             else
                 rden_r <= '0';
             end if;
+            busy_rr <= busy_r;
+            busy_r <= busy_v;
+            fpu_exe_rr <= fpu_exe_r;
+            fpu_exe_r <= fpu_exe_v;
+            fpu_vm_r <= fpu_vm_v;
+            fpu_exe_pending_r <= fpu_exe_pending_v;
+            fpu_busy_vm_r(0) <= ((busy_v or busy_r or fpu_exe_v or fpu_exe_r) and (not fpu_vm_v)) or fpu_exe_pending_v(0);
+            fpu_busy_vm_r(1) <= ((busy_v or busy_r or fpu_exe_v or fpu_exe_r) and (fpu_vm_v)) or fpu_exe_pending_v(1);
+
         end if;
     end if;
 end process;
-
 END behavior;

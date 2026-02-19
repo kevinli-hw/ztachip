@@ -62,7 +62,7 @@ signal raddr:unsigned(FIFO_DEPTH-1 downto 0);
 signal we:std_logic;
 signal ravail:unsigned(FIFO_DEPTH-1 downto 0);
 signal wused:unsigned(FIFO_DEPTH-1 downto 0);
-signal not_empty_r:std_logic;
+signal empty_r:std_logic:='1';
 signal full_r:std_logic;
 signal write:std_logic;
 begin
@@ -94,7 +94,7 @@ ram_i : DPRAM
 
 ravail <= (waddr_rr-raddr_r);
 wused <= (waddr_r-raddr_r);
-empty_out <= not not_empty_r;
+empty_out <= empty_r;
 full_out <= full_r;
 almost_full_out <= '1' when (wused >= to_unsigned(ALMOST_FULL,FIFO_DEPTH)) else '0';
 ravail_out <= std_logic_vector(ravail);
@@ -126,7 +126,7 @@ begin
       waddr_r <= (others=>'0');
       waddr_rr <= (others=>'0');
       q_r <= (others=>'0');
-      not_empty_r <= '0';
+      empty_r <= '1';
       full_r <= '0';
    else
       if(rising_edge(clock_in)) then 
@@ -154,9 +154,9 @@ begin
          raddr_r <= raddr;
 
          if(waddr_r=raddr) then
-             not_empty_r <= '0';
+             empty_r <= '1';
          else
-             not_empty_r <= '1';
+             empty_r <= '0';
          end if;
       end if;
    end if;

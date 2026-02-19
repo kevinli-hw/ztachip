@@ -172,7 +172,7 @@ void TokenizerSPM::StringToToken(char *text, int8_t bos, int8_t eos, std::vector
         int best_id = -1;
         int best_idx = -1;
 
-        for (int i=0; i < (tokens.size()-1); i++) {
+        for (int i=0; i < (int)(tokens.size()-1); i++) {
             // check if we can merge the pair (tokens[i], tokens[i+1])
             sprintf(str_buffer, "%s%s",vocab[tokens[i]],vocab[tokens[i+1]]);
             int id = lookup(str_buffer);
@@ -191,7 +191,7 @@ void TokenizerSPM::StringToToken(char *text, int8_t bos, int8_t eos, std::vector
         // merge the consecutive pair (best_idx, best_idx+1) into new token best_id
         tokens[best_idx] = best_id;
         // delete token at position best_idx+1, shift the entire sequence back 1
-        for (int i = best_idx+1; i < (tokens.size()-1); i++) {
+        for (int i = best_idx+1; i < (int)(tokens.size()-1); i++) {
             tokens[i] = tokens[i+1];
         }
         tokens.pop_back();
@@ -324,7 +324,7 @@ void TokenizerBFE::StringToToken(char* text,int8_t bos,int8_t eos,std::vector<in
     // Convert text into tokens, keeping space as its own symbol
     s.clear();
     shash = (uint8_t *)malloc(strlen(text) + 1);
-    for (i = 0; i < strlen(text); i++) {
+    for (i = 0; i < (int)strlen(text); i++) {
         char buf[8];
         if (text[i] == ' ') {
             s.push_back(std::string("\xc4\xa0"));
@@ -341,7 +341,7 @@ void TokenizerBFE::StringToToken(char* text,int8_t bos,int8_t eos,std::vector<in
     merged = true;
     while (merged) {
         merged = false;
-        for (r = 0; r < m_mergeSize; r++) {
+        for (r = 0; r < (int)m_mergeSize; r++) {
             uint8_t key = m_mergeHash[r];
             for (i = 0; i < (nTokens - 1);i++) {
                 if (key != (uint8_t)(shash[i]+shash[i+1])) {
@@ -364,7 +364,7 @@ void TokenizerBFE::StringToToken(char* text,int8_t bos,int8_t eos,std::vector<in
                 break;
         }
     }
-    for (i = 0; i < s.size(); i++) {
+    for (i = 0; i < (int)s.size(); i++) {
         int id=lookupToken((char *)s[i].c_str());
         if(id >= 0)
             tokens.push_back(id);        

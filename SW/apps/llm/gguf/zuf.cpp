@@ -110,6 +110,10 @@ ZtaStatus ZUF::Open(const char* fname) {
     m_buf = (uint8_t*)malloc(sz+2*BYTE_ALIGNMENT);
     m_top = (uint8_t *)((((size_t)m_buf+BYTE_ALIGNMENT-1)/BYTE_ALIGNMENT)*BYTE_ALIGNMENT);
     p = (uint8_t*)m_top;
+#ifdef __WIN32__
+    sz2 = _read(fd, p, sz);
+//    assert(sz2 == sz);
+#else
     while (sz > 0) {
         sz2 = _read(fd, p, MIN(sz,1000000));
         if (sz2 <= 0) {
@@ -120,6 +124,7 @@ ZtaStatus ZUF::Open(const char* fname) {
         printf(".");
         fflush(stdout);
     }
+#endif
     _close(fd);
     return ZtaStatusOk;
 }

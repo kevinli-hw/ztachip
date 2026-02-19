@@ -28,7 +28,7 @@ extern "C" {
 
 extern void kernel_llm_matmul_q4_exe(int _req_id,
                                 int N,int D,int GS,
-                                uint8_t *x_v,
+                                int16_t *x_v,
                                 float16_t *x_s,
                                 uint8_t *w_v,
                                 float16_t *w_s,
@@ -36,7 +36,7 @@ extern void kernel_llm_matmul_q4_exe(int _req_id,
                                 
 extern void kernel_llm_matmul_q8_exe(int _req_id,
                                 int N,int D,int GS,
-                                uint8_t *x_v,
+                                int16_t *x_v,
                                 float16_t *x_s,
                                 uint8_t *w_v,
                                 float16_t *w_s,
@@ -44,7 +44,7 @@ extern void kernel_llm_matmul_q8_exe(int _req_id,
 
 extern void kernel_llm_dot_product_exe(int reqId,int N,int K,float16_t *x1,float16_t *_x2,int _x2_dim,float16_t *_y,float scale);
 
-extern void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *q);
+extern void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,int16_t *q);
 
 extern void kernel_llm_dot_product2_exe(int reqId,int N,int K,float16_t *x1,float16_t *_x2,int _x2_dim,float16_t *_y);
 

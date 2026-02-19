@@ -78,7 +78,7 @@ static void reciprocal(int cnt,float *x,int xfmt,float *y,float *temp)
 //--------------------------------------------------------------------------
 // Approximate EXP function with Taylor expresion
 // First approximate EXP with...
-//     FPU.EXP((int8)(floor(x/ln2)))
+//     FPU.EXP((int16)(floor(x/ln2)))
 // FPU.EXP provides first approximation of EXP
 // Then improve accuracy with taylor expansion below
 // 1 + x*(1 + x*(0.5 + x*(0.16666667 + x*(0.04166667 + x*(0.00833333 + x*0.00138889)))))
@@ -87,9 +87,9 @@ static void reciprocal(int cnt,float *x,int xfmt,float *y,float *temp)
 static void exponent(int N,float *x,float *y,float *tmp1,float *tmp2,float *tmp3,float bias,int yfmt) { 
    >FPU.MAC.FLOOR(n=N,y=(float *)tmp1,c=1.442695,x1=(float *)x); // tmp1= floor(x/ln2)
 
-   >FPU.MAC(n=N,y=(int8 *)tmp2,x1=(float *)tmp1); // tmp2= (int8_t)tmp1
+   >FPU.MAC(n=N,y=(int16 *)tmp2,x1=(float *)tmp1); // tmp2= (int8_t)tmp1
 
-   >FPU.EXP(n=N,y=(float *)tmp3,x=(int8 *)tmp2); //tmp3 = exp(tmp2) 
+   >FPU.EXP(n=N,y=(float *)tmp3,x=(int16 *)tmp2); //tmp3 = exp(tmp2) 
 
    >FPU.MAC(n=N,y=(float *)x,a=(float *)x,c=-0.69314718,x1=(float *)tmp1); // x = x-tmp1*(ln2)
 
@@ -188,8 +188,8 @@ static void matmul_q4(void *_p,int pid) {
          if(cnt2 > NUM_PCORE)
             cnt2 = NUM_PCORE;
       
-         > $X_D := DTYPE(INT8)PCORE[0:cnt2-1].llm::x[:][:];         
-         > $X_S := DTYPE(INT8)MEM(req->x_v,req->N/req->GS,FACTOR*LLM_GS)[x:x+cnt2-1][$];  
+         > $X_D := DTYPE(INT16)PCORE[0:cnt2-1].llm::x[:][:];         
+         > $X_S := DTYPE(INT16)MEM(req->x_v,req->N/req->GS,FACTOR*LLM_GS)[x:x+cnt2-1][$];  
          > $W_S := DTYPE(INT8)MEM(req->w_v,FACTOR/2,(req->N/req->GS),2*(req->D/VECTOR_WIDTH)*(LLM_GS/2)*VECTOR_WIDTH)[$][x:x+cnt2-1][s:e-1];
          > $W_D := DTYPE(INT8)PCORE[0:cnt2-1].THREAD[0:nth-1].llm::w[0:LLM_GS-1][:];
 
@@ -229,7 +229,7 @@ static void matmul_q4(void *_p,int pid) {
                
                y_type = ((ii==(cnt2-1) && (x+NUM_PCORE)>=N)?FPU_SET_W_FP16:FPU_SET_W_FP32)|FPU_SET_M_ADDR;
                a_type = (((x==0) && (ii==0))?FPU_SET_M_VALUE:FPU_SET_M_ADDR)|FPU_SET_W_FP32;
-               a = ((x==0) && (ii==0))?0:ws->s4;
+               a = (uint32_t)(((x==0) && (ii==0))?0:ws->s4);
 
                // SPU instructions are grouped together for better performance
                // When _end_ = 0, it means the end of a group of SPU instructions
@@ -309,9 +309,9 @@ static void matmul_q8(void *_p,int pid) {
          if(cnt2 > NUM_PCORE)
             cnt2 = NUM_PCORE;
                
-         > $X_D := DTYPE(INT8)PCORE[0:cnt2-1].llm_q8::x[:][:];
+         > $X_D := DTYPE(INT16)PCORE[0:cnt2-1].llm_q8::x[:][:];
 
-         > $X_S := DTYPE(INT8)MEM(req->x_v,req->N/req->GS,FACTOR*LLM_GS)[x:x+cnt2-1][$];  
+         > $X_S := DTYPE(INT16)MEM(req->x_v,req->N/req->GS,FACTOR*LLM_GS)[x:x+cnt2-1][$];  
 
          > $W_S := DTYPE(INT8)MEM(req->w_v,FACTOR,(req->N/req->GS),(req->D/VECTOR_WIDTH)*(LLM_GS)*VECTOR_WIDTH)[$][x:x+cnt2-1][s:e-1];
 
@@ -356,7 +356,7 @@ static void matmul_q8(void *_p,int pid) {
 
                a_type = (((x==0) && (ii==0))?FPU_SET_M_VALUE:FPU_SET_M_ADDR)|FPU_SET_W_FP32;
 
-               a = ((x==0) && (ii==0))?0:ws->s4;
+               a = (uint32_t)(((x==0) && (ii==0))?0:ws->s4);
 
                // SPU instructions are grouped together for better performance
                // When _end_ = 0, it means the end of a group of SPU instructions
@@ -385,7 +385,7 @@ void kernel_llm_matmul_q4_exe(
    int N, // Dimension of _x and _w
    int D, // Result dimension _y
    int GS, // Quantized group
-   uint8_t *x_v, // x value vector with dimention Nx1
+   int16_t *x_v, // x value vector with dimention Nx1
    float16_t *x_s, // x scaling vector with dimension (N/QS)x1
    uint8_t *w_v, // w value vector with dimension DxN
    float16_t *w_s, // w scaling vector with dimension Dx(N/QS)
@@ -417,7 +417,7 @@ void kernel_llm_matmul_q8_exe(
    int N, // Dimension of _x and _w
    int D, // Result dimension _y
    int GS, // Quantized group
-   uint8_t *x_v, // x value vector with dimention Nx1
+   int16_t *x_v, // x value vector with dimention Nx1
    float16_t *x_s, // x scaling vector with dimension (N/QS)x1
    uint8_t *w_v, // w value vector with dimension DxN
    float16_t *w_s, // w scaling vector with dimension Dx(N/QS)
@@ -472,7 +472,7 @@ typedef struct {
    float    y2[BATCH_QUANT];
 } quantize_ws;
 
-void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *q) {
+void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,int16_t *q) {
    int cnt,cnt2;
    unsigned int y16;
    uint32_t resp;
@@ -507,10 +507,10 @@ void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *
 
       > FPU.MAX.ABS(N=remain,y=(float *)ws->y,x=(bfloat *)ws->x,g=31);
 
-      // Then divide the MAX by 127, get result in FP16, this the the scaling factor used
+      // Then divide the MAX by 2047, get result in FP16, this the the scaling factor used
       // when dequantize
 
-      >FPU.MAC(N=remain2,y=(bfloat *)ws->y16,x1=(float *)ws->y,x2=(float)0.0078740157);
+      >FPU.MAC(N=remain2,y=(bfloat *)ws->y16,x1=(float *)ws->y,x2=(float)4.8851978505e-4);
 
       >DTYPE(INT16)MEM(y16,N/32)[j:j+remain2-1] <= DTYPE(INT16)SCRATCH((uint32_t)ws->y16,remain2)[:];
 
@@ -523,9 +523,9 @@ void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *
 
       // Scale the group to INT8
 
-      for (m = 0,qy=ws->y2,qc=ws->y,qx=ws->x2; 
+      for (m = 0,qy=(uint32_t)(ws->y2),qc=(uint32_t)(ws->y),qx=(uint32_t)(ws->x2); 
            m < cnt2;
-           m++,qy+=GS,qc+=4,qx+=GS*2) {
+           m++,qy+=(GS*sizeof(int16_t)),qc+=4,qx+=GS*2) {
          group = j+m;
          if(group >= num_groups) 
             break; 
@@ -537,9 +537,9 @@ void kernel_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *
 
          _end_ = (((m%8)==7) || group==(num_groups-1) || (m==(cnt2-1)))? 0 : '.';
 
-         > FPU.MAC(N=GS,y=(int8 *)qy,c=(float *)qc,x1=(bfloat *)qx) _end_;
+         > FPU.MAC(N=GS,y=(int16 *)qy,c=(float *)qc,x1=(bfloat *)qx) _end_;
       }
-      >DTYPE(INT16)MEM(y,N/2)[i/2:(i+remain)/2-1] <= DTYPE(INT16)SCRATCH((uint32_t)ws->y2,remain/2)[:];    
+      >DTYPE(INT16)MEM(y,N)[i:(i+remain)-1] <= DTYPE(INT16)SCRATCH((uint32_t)ws->y2,remain)[:];    
       >BARRIER;
    }
    ztaJobDone(reqId);
@@ -635,7 +635,7 @@ static void llm_dot_product_exe(void *_p,int pid)
 
          for(k=0;k < cnt2;k++,sum += 4,x2 += DOT_PRODUCT_BATCH*2)
          {
-            y = last?&ws->sum2[k]:sum; 
+            y = last?(uint32_t)(&ws->sum2[k]):sum; 
 
             yfmt = ((last)?FPU_SET_W_FP16:FPU_SET_W_FP32)|FPU_SET_M_ADDR; 
             
@@ -658,6 +658,7 @@ static void llm_dot_product_exe(void *_p,int pid)
       }
       >DTYPE(INT16)MEM((uint32_t)req->_y,((pid==0)?sz:req->K))[j:j+cnt2-1] <= DTYPE(INT16)SCRATCH((uint32_t)ws->sum2,cnt2)[0:cnt2-1];   
    } 
+   >BARRIER;
 }
 
 void kernel_llm_dot_product_exe(int reqId,int N,int K,float16_t *x1,float16_t *_x2,int _x2_dim,float16_t *_y,float scale)
@@ -772,7 +773,7 @@ static void llm_dot_product2_exe(void *_p,int pid)
 
          for(i=0;i < cnt2;i++,sum+=4,x2+=DOT_PRODUCT_K_BATCH*2)
          {
-            y = last?&ws->sram_sum2[i]:sum;
+            y = last?(uint32_t)(&ws->sram_sum2[i]):sum;
 
             yfmt = ((last)?FPU_SET_W_FP16:FPU_SET_W_FP32)|FPU_SET_M_ADDR; 
 
@@ -1132,7 +1133,7 @@ void kernel_llm_softmax_exe(int reqId,float16_t *x,int N)
                ws->tmp4,
                ws->tmp5,
                0.0f,
-               2);  
+               2); 
 
       > DTYPE(INT16)SCRATCH(((uint32_t)&ws->tmp2[0])+4*cnt,16)[:] <= INT16(0);
 
@@ -1449,7 +1450,7 @@ static int find_max(uint16_t *x,int N)
 {
    float f;
    float max=0;
-   int i,found; 
+   int i,found=0; 
    
    for(i=0;i < N;i++,x++) {
       f = BF2F(*x);
@@ -1522,9 +1523,7 @@ int kernel_llm_find_k_max(float16_t *x,uint32_t _N,int K, int *top,float *topp) 
       last = ((i+cnt) >= N)?true:false; 
 
       kernel_llm_done();
-
-      FLUSH_DATA_CACHE();
-
+      
       if(!last) {
          // Prefetch tokens and get FPGA to process for next batch of tokens
          //  while RISCV is busy processing 
@@ -1536,6 +1535,8 @@ int kernel_llm_find_k_max(float16_t *x,uint32_t _N,int K, int *top,float *topp) 
 
          >FPU.MAX(N=cnt2,y=(bfloat *)ws->y[!toggle],x=(bfloat *)ws->x[!toggle],g=63);
       }
+
+      FLUSH_DATA_CACHE();
 
       for(int j=0;j < cnt;j+=MAX_K_GROUP_SZ) {
          if( ws2->y[toggle][j/MAX_K_GROUP_SZ] <= max[K-1].s.f)
@@ -1574,7 +1575,7 @@ int kernel_llm_find_k_max(float16_t *x,uint32_t _N,int K, int *top,float *topp) 
 int kernel_llm_find_max(float16_t *x,uint32_t N) {
    uint32_t i,cnt,cnt2;
    float max;
-   int maxi;
+   int maxi=0;
    int group;
    int numGroup;
    find_max_ws *ws=(find_max_ws *)0;
@@ -1629,9 +1630,9 @@ int kernel_llm_find_max(float16_t *x,uint32_t N) {
 
    FLUSH_DATA_CACHE();
 
-   group = find_max(&ws2->y[0],cnt/MAX_GROUP_SZ);
+   group = find_max((uint16_t *)(&ws2->y[0]),cnt/MAX_GROUP_SZ);
 
-   return maxi+group*MAX_GROUP_SZ+find_max(&ws2->x[group*MAX_GROUP_SZ],MAX_GROUP_SZ); 
+   return maxi+group*MAX_GROUP_SZ+find_max((uint16_t *)(&ws2->x[group*MAX_GROUP_SZ]),MAX_GROUP_SZ); 
 }
 
 //--------------------------------------------------------------------------

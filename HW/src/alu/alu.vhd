@@ -51,7 +51,7 @@ END alu;
 
 ARCHITECTURE behavior OF alu IS
 
-constant FP12_INT_WIDTH:integer:=20;
+constant FP12_INT_WIDTH:integer:=24;
 
 SIGNAL add_sub:STD_LOGIC;
 SIGNAL add_sub_r:STD_LOGIC;

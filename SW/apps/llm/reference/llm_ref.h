@@ -28,11 +28,11 @@
 extern "C" {
 #endif
 
-extern void kernel_ref_llm_matmul_q4_exe(int _req_id,int N,int D,int gs,uint8_t *x_v,float16_t *x_s,
+extern void kernel_ref_llm_matmul_q4_exe(int _req_id,int N,int D,int gs,int16_t *x_v,float16_t *x_s,
                                           uint8_t *w_v,float16_t *w_s,float16_t *result);
-extern void kernel_ref_llm_matmul_q8_exe(int _req_id,int N,int D,int gs,uint8_t *x_v,float16_t *x_s,
+extern void kernel_ref_llm_matmul_q8_exe(int _req_id,int N,int D,int gs,int16_t *x_v,float16_t *x_s,
                                           uint8_t *w_v,float16_t *w_s,float16_t *result);
-extern void kernel_ref_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,uint8_t *q);
+extern void kernel_ref_llm_quantize_exe(int reqId,int N,float16_t *x,float16_t *s,int16_t *q);
 
 extern void kernel_ref_llm_rms_exe(int reqId,int N,float16_t *x,float16_t *o,float *w);
 
@@ -55,6 +55,8 @@ extern void kernel_ref_llm_softmax_exe(int reqId,float16_t *x,int N);
 extern void kernel_ref_llm_scale_exe(int reqId,int N,float16_t *x,float scale);
 
 extern int kernel_ref_llm_find_max(float16_t *x,uint32_t N);
+
+extern int kernel_ref_llm_find_k_max(float16_t* x, uint32_t _N_, int K, int* top, float* topp);
 
 #ifdef __cplusplus
 }

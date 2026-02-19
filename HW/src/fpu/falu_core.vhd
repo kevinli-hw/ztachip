@@ -51,6 +51,7 @@ ENTITY falu_core IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
+        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -112,17 +113,75 @@ SIGNAL alu_input_eof:STD_LOGIC;
 SIGNAL alu_input_last:STD_LOGIC;
 SIGNAL alu_input_fast:STD_LOGIC;
 
+SIGNAL step_r:unsigned(sram_depth_c-1 DOWNTO 0);
+SIGNAL opcode_r:fpu_opcode_t;
+SIGNAL input_ena_r:STD_LOGIC;
+SIGNAL input_eof_r:STD_LOGIC;
+SIGNAL input_last_r:STD_LOGIC;
+SIGNAL input_fast_r:STD_LOGIC;
+SIGNAL A_addr_r:unsigned(sram_depth_c-1 DOWNTO 0);
+SIGNAL A_precision_r:unsigned(2 downto 0);
+SIGNAL A_int_r:STD_LOGIC;
+SIGNAL A_floor_r:STD_LOGIC;
+SIGNAL A_abs_r:STD_LOGIC;
+SIGNAL B_r:fp32_t;
+SIGNAL C_r:fp32_t;
+SIGNAL C2_r:fp32_t;
+SIGNAL X_r:fp32_t;
+SIGNAL Y_r:fp32_t;
+
 BEGIN
 
-process(input_ena_in,B_in,alu_output,
-        step_in,opcode_in,input_eof_in,
-        input_last_in,input_fast_in,A_addr,A_precision,
+process(clock_in,reset_in)
+begin
+    if reset_in = '0' then
+        step_r <= (others=>'0');
+        opcode_r <= (others=>'0');
+        input_ena_r <= '0';
+        input_eof_r <= '0';
+        input_last_r <= '0';
+        input_fast_r <= '0';
+        A_addr_r <= (others=>'0');
+        A_precision_r <= (others=>'0');
+        A_floor_r <= '0';
+        A_abs_r <= '0';
+        A_int_r <= '0';
+        B_r <= (others=>'0');
+        C_r <= (others=>'0');
+        C2_r <= (others=>'0');
+        X_r <= (others=>'0');
+        Y_r <= (others=>'0');
+    else
+        if clock_in'event and clock_in='1' then
+            step_r <= step_in;
+            opcode_r <= opcode_in;
+            input_ena_r <= input_ena_in;
+            input_eof_r <= input_eof_in;
+            input_last_r <= input_last_in;
+            input_fast_r <= input_fast_in;
+            A_addr_r <= A_addr;
+            A_precision_r <= A_precision;
+            A_floor_r <= A_floor;
+            A_abs_r <= A_abs;
+            A_int_r <= A_int;
+            B_r <= B_in;
+            C_r <= C_in;
+            C2_r <= C2_in;
+            X_r <= X_in;
+            Y_r <= Y_in;
+        end if;
+    end if;
+end process;
+
+process(input_ena_r,B_r,alu_output,
+        step_r,opcode_r,input_eof_r,
+        input_last_r,input_fast_r,A_addr_r,A_precision_r,
         alu_output_step,alu_output_opcode,alu_output_ena,
         alu_output_eof,alu_output_last,alu_output_fast,
         alu_output_addr,alu_output_precision )
 begin
-if(input_ena_in='1' and 
-    (opcode_in=register2_fpu_exe_sum_c or opcode_in=register2_fpu_exe_max_c or opcode_in=register2_fpu_exe_group_max_c)) then
+if(input_ena_r='1' and 
+    (opcode_r=register2_fpu_exe_sum_c or opcode_r=register2_fpu_exe_max_c or opcode_r=register2_fpu_exe_group_max_c)) then
     alu_step <= (others=>'0');
     alu_opcode <= (others=>'0');
     alu_input_ena <= '0';
@@ -130,27 +189,27 @@ if(input_ena_in='1' and
     alu_input_last <= '0';
     alu_input_fast <= '0';
 else
-    alu_step <= step_in;
-    alu_opcode <= opcode_in;
-    alu_input_ena <= input_ena_in;
-    alu_input_eof <= input_eof_in;
-    alu_input_last <= input_last_in;
-    alu_input_fast <= input_fast_in;
+    alu_step <= step_r;
+    alu_opcode <= opcode_r;
+    alu_input_ena <= input_ena_r;
+    alu_input_eof <= input_eof_r;
+    alu_input_last <= input_last_r;
+    alu_input_fast <= input_fast_r;
 end if;
 
-if(input_ena_in='1' and 
-    (opcode_in=register2_fpu_exe_sum_c or opcode_in=register2_fpu_exe_max_c or opcode_in=register2_fpu_exe_group_max_c)) then
-    alu2_step <= step_in;
-    alu2_opcode <= opcode_in;
-    alu2_ena <= input_ena_in;
-    alu2_eof <= input_eof_in;
-    alu2_abs <= A_abs;
-    alu2_last <= input_last_in;
-    alu2_fast <= input_fast_in;
-    alu2_addr <= A_addr;
-    alu2_precision <= A_precision;
-    alu2_C2 <= C_in;
-    alu2_B <= B_in;
+if(input_ena_r='1' and 
+    (opcode_r=register2_fpu_exe_sum_c or opcode_r=register2_fpu_exe_max_c or opcode_r=register2_fpu_exe_group_max_c)) then
+    alu2_step <= step_r;
+    alu2_opcode <= opcode_r;
+    alu2_ena <= input_ena_r;
+    alu2_eof <= input_eof_r;
+    alu2_abs <= A_abs_r;
+    alu2_last <= input_last_r;
+    alu2_fast <= input_fast_r;
+    alu2_addr <= A_addr_r;
+    alu2_precision <= A_precision_r;
+    alu2_C2 <= C_r;
+    alu2_B <= B_r;
 elsif(alu_output_ena='1' and alu_output_opcode=register2_fpu_exe_fma_c) then
     alu2_step <= alu_output_step;
     alu2_opcode <= alu_output_opcode;
@@ -225,15 +284,16 @@ falu_i: falu
         input_eof_in => alu_input_eof,
         input_last_in => alu_input_last,
         input_fast_in => alu_input_fast,
-        A_addr => A_addr,
-        A_precision => A_precision,
-        A_floor => A_floor,
-        A_abs => A_abs,
-        B_in => B_in,
-        C_in => C_in,
-        C2_in => C2_in,
-        X_in => X_in,
-        Y_in => Y_in,
+        A_addr => A_addr_r,
+        A_precision => A_precision_r,
+		A_int => A_int_r,
+        A_floor => A_floor_r,
+        A_abs => A_abs_r,
+        B_in => B_r,
+        C_in => C_r,
+        C2_in => C2_r,
+        X_in => X_r,
+        Y_in => Y_r,
         output_ena_out => alu_output_ena,
         output_step_out => alu_output_step,
         output_opcode_out => alu_output_opcode,

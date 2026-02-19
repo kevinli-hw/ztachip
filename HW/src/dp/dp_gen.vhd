@@ -439,6 +439,7 @@ SIGNAL debug_source_bar:std_logic_vector(31 downto 0);
 SIGNAL debug_dest_bar:std_logic_vector(31 downto 0);
 
 SIGNAL gen_busy_dest_r:std_logic;
+SIGNAL gen_eof_r:std_logic:='1';
 BEGIN
 
 gen_src_scatter_out <= src_scatter_rrrr;
@@ -709,7 +710,7 @@ gen_data_model_dest_out <= dp_dst_data_model_rrrr;
 gen_bus_id_source_out <= dp_src_bus_id_rrrr;
 gen_data_type_source_out <= dp_src_data_type_rrrr;
 gen_data_model_source_out <= dp_src_data_model_rrrr;
-gen_eof_out <= '1' when (eof_rrrr='1' or s_gen_burstlen_progress_r='0') else '0';
+gen_eof_out <= gen_eof_r;
 gen_burstlen_source_out <= s_gen_burstlen_rr;
 gen_burstlen_dest_out <= d_gen_burstlen_rr;
 gen_thread_out <= dp_thread_rrrr;
@@ -910,6 +911,7 @@ begin
         d_burstpos_end_rrr <= (others=>'0');
 
         gen_busy_dest_r <= '0';
+        gen_eof_r <= '1';
     else
         if clock_in'event and clock_in='1' then
              if waitreq='0' then
@@ -988,10 +990,13 @@ begin
                    s_burstlen_v := s_gen_burstlen_r;
                 end if;                                       
                 s_gen_burstlen_rr <= s_burstlen_v;
+
                 if( s_burstlen_v = to_unsigned(0,burstlen_t'length)) then
                    s_gen_burstlen_progress_r <= '0';
+                   gen_eof_r <= '1';
                 else
                    s_gen_burstlen_progress_r <= '1';
+                   gen_eof_r <= eof_rrr;
                 end if;
 
                 ---

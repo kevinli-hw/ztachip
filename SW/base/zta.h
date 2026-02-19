@@ -506,7 +506,7 @@
 
 #define FPU_SET_W_FP32   16
 
-#define FPU_SET_W_INT8   32
+#define FPU_SET_W_INT16  32
 
 #define FPU_SET_W_ZFP16  48
 

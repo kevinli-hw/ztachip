@@ -204,8 +204,8 @@ static void genParm(FILE *out,uint32_t _attr,std::string &type,std::string &parm
       _attr |= FPU_SET_W_ZFP16; 
    else if(strcasecmp(type.c_str(),"float")==0) 
       _attr |= FPU_SET_W_FP32;
-   else if(strcasecmp(type.c_str(),"int8")==0) 
-      _attr |= FPU_SET_W_INT8;
+   else if(strcasecmp(type.c_str(),"int16")==0) 
+      _attr |= FPU_SET_W_INT16;
    else
       _attrDynamic = true;
    if(isPointer) {
@@ -233,15 +233,15 @@ static void genParm(FILE *out,uint32_t _attr,std::string &type,std::string &parm
 
    if(!_isConstant) {
       if(_attrDynamic)
-         fprintf(out,"ZTAM_GREG(0x%x|(%s),0x%x,0)=%s;",_attr,type.c_str(),REG_FPU_SET,parm.c_str());
+         fprintf(out,"ZTAM_GREG(0x%x|(%s),0x%x,0)=(uint32_t)(%s);",_attr,type.c_str(),REG_FPU_SET,parm.c_str());
       else {
          if(isPointer)
-            fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",_attr,REG_FPU_SET,parm.c_str());
+            fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",_attr,REG_FPU_SET,parm.c_str());
          else {
             if(strcasecmp(type.c_str(),"float")==0)
                fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=*((uint32_t *)&(%s));",_attr,REG_FPU_SET,parm.c_str());
             else
-               fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",_attr,REG_FPU_SET,parm.c_str());
+               fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",_attr,REG_FPU_SET,parm.c_str());
          }
       }
    } else {
@@ -275,7 +275,7 @@ static int scan_fma(
    std::vector<bool> &isPointers,
    char end) 
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool a_valid=false;
@@ -292,7 +292,7 @@ static int scan_fma(
    }
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -353,7 +353,7 @@ static int scan_mac(
    std::vector<bool> &isPointers,
    char end) 
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool a_valid=false;
@@ -370,7 +370,7 @@ static int scan_mac(
    }
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -428,7 +428,7 @@ static int scan_exp(
    std::vector<bool> &isPointers,
    char end) 
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool x_valid=false;
@@ -438,7 +438,7 @@ static int scan_exp(
 
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -474,7 +474,7 @@ static int scan_reciprocal(
    std::vector<bool> &isPointers,
    char end)
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool x_valid=false;
@@ -484,7 +484,7 @@ static int scan_reciprocal(
 
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -520,7 +520,7 @@ static int scan_invsqrt(
    std::vector<bool> &isPointers,
    char end)
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool x_valid=false;
@@ -530,7 +530,7 @@ static int scan_invsqrt(
 
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -569,7 +569,7 @@ static int scan_max(
    std::vector<bool> &isPointers,
    char end) 
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool abs=false;
    bool y_valid=false;
@@ -584,7 +584,7 @@ static int scan_max(
    }
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;
@@ -638,7 +638,7 @@ static int scan_sum(
    std::vector<bool> &isPointers,
    char end)
 {
-   uint32_t _attr;
+   uint32_t _attr=0;
    int i;
    bool y_valid=false;
    bool x_valid=false;
@@ -650,7 +650,7 @@ static int scan_sum(
    }
    for(i=0;i < (int)names.size();i++) {
       if(strcasecmp(names[i].c_str(),"N")==0) {
-         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=%s;",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
+         fprintf(out,"ZTAM_GREG(0x%x,0x%x,0)=(uint32_t)(%s);",FPU_SET_P_CNT,REG_FPU_SET,parms[i].c_str());    
       } else {
          if(strcasecmp(names[i].c_str(),"y")==0) {
             _attr = FPU_SET_P_A;

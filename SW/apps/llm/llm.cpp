@@ -47,6 +47,7 @@
 #define kernel_llm_softmax_exe kernel_ref_llm_softmax_exe
 #define kernel_llm_find_max kernel_ref_llm_find_max
 #define kernel_llm_scale_exe kernel_ref_llm_scale_exe
+#define kernel_llm_find_k_max kernel_ref_llm_find_k_max
 #endif
 
 #ifdef __WIN32__
@@ -284,16 +285,13 @@ ZtaStatus llama::Open(const char* checkpoint_path) {
     m_runtime.att = (float16_t *)calloc(m_config.seq_len+16, sizeof(float16_t));
     m_runtime.logits = (float16_t *)calloc(m_config.vocab_size, sizeof(float16_t));
 
-    m_runtime.xbq.quant = ZUF_QUANT_INT8;
-    m_runtime.xbq.q = (uint8_t *)calloc(m_config.dim, sizeof(int8_t));
+    m_runtime.xbq.q = (int16_t *)calloc(m_config.dim, sizeof(int16_t));
     m_runtime.xbq.s = (float16_t *)calloc(m_config.dim/GS, sizeof(float16_t));
     
-    m_runtime.hbq.quant = ZUF_QUANT_INT8;
-    m_runtime.hbq.q = (uint8_t *)calloc(m_config.hidden_dim, sizeof(int8_t));
+    m_runtime.hbq.q = (int16_t *)calloc(m_config.hidden_dim, sizeof(int16_t));
     m_runtime.hbq.s = (float16_t *)calloc(m_config.hidden_dim / GS, sizeof(float16_t));
 
-    m_runtime.xq.quant = ZUF_QUANT_INT8;
-    m_runtime.xq.q = (uint8_t *)calloc(m_config.dim, sizeof(int8_t));
+    m_runtime.xq.q = (int16_t *)calloc(m_config.dim, sizeof(int16_t));
     m_runtime.xq.s = (float16_t *)calloc(m_config.dim / GS, sizeof(float16_t));
 
     // Generate lookup 
@@ -445,7 +443,7 @@ ZtaStatus llama::SetSamplingPolicyGreedy() {
 // Matrix multiplication between weights and activations
 // Support weight with Q8 or Q4 quantization
 
-void llama::matmul(int req_id,int N,int D,int gs,uint8_t *x_v,float16_t *x_s,QuantizedTensor *w,float16_t *result) {
+void llama::matmul(int req_id,int N,int D,int gs,int16_t *x_v,float16_t *x_s,WeightTensor *w,float16_t *result) {
     if(w->quant==ZUF_QUANT_INT4)
         kernel_llm_matmul_q4_exe(req_id,N,D,gs,x_v,x_s,w->q,w->s,result);
     else
@@ -526,7 +524,6 @@ float16_t* llama::forward(int token, int pos) {
             kernel_llm_dot_product2_exe(-1,head_size,(pos+1),m_runtime.att,k_start,kv_dim,xb);
         }
 
-
         kernel_llm_quantize_exe(-1,dim,m_runtime.xb,m_runtime.xbq.s,m_runtime.xbq.q);
 
         matmul(-1,dim, dim, GS, m_runtime.xbq.q,m_runtime.xbq.s, &m_weights.woq[l], m_runtime.xb2);
@@ -546,17 +543,20 @@ float16_t* llama::forward(int token, int pos) {
         kernel_llm_SwiGLU_exe(-1,m_runtime.hb,m_runtime.hb2,hidden_dim);
 
         // final matmul to get the output of the ffn
+
         kernel_llm_quantize_exe(-1,hidden_dim,m_runtime.hb,m_runtime.hbq.s,m_runtime.hbq.q);
 
         matmul(-1,hidden_dim, dim, GS,m_runtime.hbq.q,m_runtime.hbq.s, &m_weights.w2q[l],m_runtime.xb);
 
         kernel_llm_residual_exe(-1,dim,m_runtime.x,m_runtime.x,m_runtime.xb); 
-
+#ifndef __WIN32__
         while(ztaReadResponse(&resp)) {}
+#endif
     }
 
     kernel_llm_rms_exe(-1,dim,m_runtime.x,m_runtime.x,m_weights.rms_final_weight);
     // classifier into logits
+
     kernel_llm_quantize_exe(-1,dim,m_runtime.x,m_runtime.xq.s,m_runtime.xq.q);
 
     matmul(-1,m_config.dim, m_config.vocab_size, GS,m_runtime.xq.q,m_runtime.xq.s, &m_weights.wclsq,m_runtime.logits);
@@ -592,6 +592,8 @@ int llama::sampling(float16_t* _logits) {
         return kernel_llm_find_max(_logits, m_config.vocab_size);
 
     kernel_llm_scale_exe(- 1, m_config.vocab_size, _logits, m_samplingScale);
+//        kernel_llm_done();
+//        FLUSH_DATA_CACHE();
     kernel_llm_softmax_exe(-1, _logits, m_config.vocab_size);
 
     kernel_llm_done();    

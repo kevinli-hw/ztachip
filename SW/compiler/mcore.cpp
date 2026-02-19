@@ -959,7 +959,7 @@ int cMcoreTerm::GenVariableTensor(FILE *out, int _parm, cMcoreRange *_parmRange)
    assert(m_var >= 0);
    assert(_parm < 0);
    sprintf(temp, "(%d)", m_var);
-   GEN(out, m_var, REG_DP_RESTORE, 0, "0");
+   GEN(out, m_var, REG_DP_RESTORE, 0, (char *)"0");
 
    // Override with variable parameter...
 
@@ -2615,7 +2615,7 @@ char *cMcore::scan_term(char *line, cMcoreTerm *term)
       {
          if (term->m_concurrent.size() > 0)
             error(cMcore::M_currLine, "Multiple SCATTER");
-         scan_specifier(&term->m_concurrent,"(0)");
+         scan_specifier(&term->m_concurrent,(char *)"(0)");
          line = scan_name(line, token);
       }
       else if (strcasecmp(token, TOKEN_FOR) == 0)

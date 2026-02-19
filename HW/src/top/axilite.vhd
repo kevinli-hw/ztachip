@@ -75,7 +75,16 @@ SIGNAL wdata_fifo_empty:std_logic;
 SIGNAL wdata_fifo_full:std_logic;
 SIGNAL waddr_fifo_empty:std_logic;
 SIGNAL waddr_fifo_full:std_logic;
+SIGNAL write:std_logic;
+
+SIGNAL bus_waddr:std_logic_vector(io_depth_c-1 downto 0);
+SIGNAL bus_waddr_r:std_logic_vector(io_depth_c-1 downto 0);
 SIGNAL bus_write:std_logic;
+SIGNAL bus_write_r:std_logic;
+SIGNAL bus_writedata:std_logic_vector(host_width_c-1 downto 0);
+SIGNAL bus_writedata_r:std_logic_vector(host_width_c-1 downto 0);
+SIGNAL bus_writewait:std_logic;
+
 BEGIN
 
 bus_read <= axilite_arvalid_in; -- Do not issue read until all previous write queues are empty
@@ -94,10 +103,10 @@ axilite_arready_out <= (not bus_readwait_in);
 
 axilite_rdata_out <= axilite_rdata;
 
-bus_write <= '1' when (waddr_fifo_empty='0') and (wdata_fifo_empty='0') and (axilite_bready_in='1') 
+write <= '1' when (waddr_fifo_empty='0') and (wdata_fifo_empty='0') and (axilite_bready_in='1') 
              else '0';
 
-bus_write_out <= bus_write;
+bus_write <= write;
 
 axilite_awready_out <= not waddr_fifo_full;
 
@@ -113,7 +122,7 @@ axilite_bresp_out <= (others=>'0');
 
 waddr_fifo_write <= axilite_awvalid_in and (not waddr_fifo_full);
 
-waddr_fifo_read <= (not bus_writewait_in) and (bus_write); 
+waddr_fifo_read <= (not bus_writewait) and (write); 
 
 waddr_fifo_i : scfifo
 	generic map
@@ -129,7 +138,7 @@ waddr_fifo_i : scfifo
         data_in=>axilite_awaddr_in,
         write_in=>waddr_fifo_write,
         read_in=>waddr_fifo_read,
-        q_out=>bus_waddr_out,
+        q_out=>bus_waddr,
         ravail_out=>open,
         wused_out=>open,
         empty_out=>waddr_fifo_empty,
@@ -141,7 +150,7 @@ waddr_fifo_i : scfifo
 
 wdata_fifo_write <= axilite_wvalid_in and (not wdata_fifo_full);
 
-wdata_fifo_read <= (not bus_writewait_in) and (bus_write); 
+wdata_fifo_read <= (not bus_writewait) and (write); 
 
 wdata_fifo_i : scfifo
 	generic map
@@ -157,7 +166,7 @@ wdata_fifo_i : scfifo
         data_in=>axilite_wdata_in,
         write_in=>wdata_fifo_write,
         read_in=>wdata_fifo_read,
-        q_out=>bus_writedata_out,
+        q_out=>bus_writedata,
         ravail_out=>open,
         wused_out=>open,
         empty_out=>wdata_fifo_empty,
@@ -165,7 +174,38 @@ wdata_fifo_i : scfifo
         almost_full_out=>open
 	);
 
-	
+-----
+-- Latch write request to bus interface
+-----
+
+bus_waddr_out <= bus_waddr_r;
+
+bus_write_out <= bus_write_r;
+
+bus_writedata_out <= bus_writedata_r;
+
+bus_writewait <= bus_write and bus_write_r and bus_writewait_in;
+
+process(reset_in,clock_in)
+begin
+   if reset_in = '0' then
+      bus_waddr_r <= (others=>'0');
+      bus_write_r <= '0';
+      bus_writedata_r <= (others=>'0');
+   else
+      if clock_in'event and clock_in='1' then
+         if(bus_write='1' and bus_writewait='0') then
+            bus_waddr_r <= bus_waddr;
+            bus_write_r <= bus_write;
+            bus_writedata_r <= bus_writedata;
+         elsif(bus_writewait_in='0') then
+            bus_waddr_r <= (others=>'0');
+            bus_write_r <= '0';
+            bus_writedata_r <= (others=>'0');
+         end if;
+      end if;
+   end if;
+end process;
 
 process(clock_in,reset_in)
 begin

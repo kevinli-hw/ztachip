@@ -255,6 +255,8 @@ SIGNAL ddr_sink_busy_r:std_logic;
 
 SIGNAL fpu_busy_vm:STD_LOGIC_VECTOR(1 DOWNTO 0);
 
+SIGNAL fpu_busy_vm_r:STD_LOGIC_VECTOR(1 DOWNTO 0);
+
 -- Pack template into a linear buffer
 
 function pack_dp_template(rec_in: dp_template_t) return dp_template_record_t is
@@ -960,9 +962,9 @@ task_tid_mask_out <= task_tid_mask_r;
 task_iregister_auto_out <= task_iregister_auto_r;
 task_data_model_out <= task_data_model_r;
 
-fpu_busy_vm(0) <= fpu_busy_vm_in(0) or ((not fpu_exe_vm_r) and fpu_exe_r) or ((not fpu_exe_vm_rr) and fpu_exe_rr) or ((not fpu_exe_vm_rrr) and fpu_exe_rrr);
+fpu_busy_vm(0) <= fpu_busy_vm_in(0) or fpu_busy_vm_r(0);
 
-fpu_busy_vm(1) <= fpu_busy_vm_in(1) or ((fpu_exe_vm_r) and fpu_exe_r) or ((fpu_exe_vm_rr) and fpu_exe_rr) or ((fpu_exe_vm_rrr) and fpu_exe_rrr);
+fpu_busy_vm(1) <= fpu_busy_vm_in(1) or fpu_busy_vm_r(1);
 
 
 avail <= ready_in and (not instruction_valid_r) and (not instruction_valid_rr);
@@ -1845,6 +1847,8 @@ end if;
 end process;
 
 process(reset_in,clock_in)
+variable fpu_exe_v:std_logic;
+variable fpu_exe_vm_v:std_logic;
 begin
    if reset_in = '0' then
       log_enable_r <= '0';
@@ -1854,26 +1858,33 @@ begin
       fpu_exe_vm_r <= '0';
       fpu_exe_vm_rr <= '0';
       fpu_exe_vm_rrr <= '0';
+      fpu_busy_vm_r <= (others=>'0');
    else
         if clock_in'event and clock_in='1' then
-           if((ready='1') and (pause='0') and (orec.opcode = dp_opcode_fpu_exe_c)) then
-               fpu_exe_r <= '1';
-               fpu_exe_vm_r <= orec.vm;
-           else
-               fpu_exe_r <= '0';
-               fpu_exe_vm_r <= '0';
-           end if;
-           fpu_exe_rr <= fpu_exe_r;
-           fpu_exe_rrr <= fpu_exe_rr;
-           fpu_exe_vm_rr <= fpu_exe_vm_r;
-           fpu_exe_vm_rrr <= fpu_exe_vm_rr;
-           if ready='1' and pause='0' then
-              if orec.opcode = dp_opcode_log_on_c then
-                 log_enable_r <= '1';
-              elsif orec.opcode = dp_opcode_log_off_c then
-                 log_enable_r <= '0';
-              end if;
-           end if;
+            fpu_exe_v := fpu_exe_r;
+            fpu_exe_vm_v := fpu_exe_vm_r;
+            if((ready='1') and (pause='0') and (orec.opcode = dp_opcode_fpu_exe_c)) then
+               fpu_exe_v := '1';
+               fpu_exe_vm_v := orec.vm;
+            else
+               fpu_exe_v := '0';
+               fpu_exe_vm_v := '0';
+            end if;
+            fpu_exe_rr <= fpu_exe_r;
+            fpu_exe_rrr <= fpu_exe_rr;
+            fpu_exe_vm_rr <= fpu_exe_vm_r;
+            fpu_exe_vm_rrr <= fpu_exe_vm_rr;
+            if ready='1' and pause='0' then
+               if orec.opcode = dp_opcode_log_on_c then
+                  log_enable_r <= '1';
+               elsif orec.opcode = dp_opcode_log_off_c then
+                  log_enable_r <= '0';
+               end if;
+            end if;
+            fpu_busy_vm_r(0) <= ((not fpu_exe_vm_v) and fpu_exe_v) or ((not fpu_exe_vm_r) and fpu_exe_r) or ((not fpu_exe_vm_rr) and fpu_exe_rr);
+            fpu_busy_vm_r(1) <= ((fpu_exe_vm_v) and fpu_exe_v) or ((fpu_exe_vm_r) and fpu_exe_r) or ((fpu_exe_vm_rr) and fpu_exe_rr);
+            fpu_exe_r <= fpu_exe_v;
+            fpu_exe_vm_r <= fpu_exe_vm_v;
         end if;
     end if;
 end process;

@@ -648,9 +648,9 @@ type vector_forks_t is array(natural range <>) of vector_fork_t;
 -- Floating point type definition
 -------
 
-constant fp12_exp_width_c:integer:=3;
+constant fp12_exp_width_c:integer:=4;
 
-constant fp12_mantissa_width_c:integer:=12;
+constant fp12_mantissa_width_c:integer:=11;
 
 constant fp32_exp_width_c:integer:=8;
 
@@ -1086,7 +1086,7 @@ constant register2_fpu_set_P_CNT        :integer:=5; -- P subfield to set CNT pa
 constant register2_fpu_set_P_C2         :integer:=6; -- P subfield to set C2 parameter
 constant register2_fpu_set_W_FP16       :integer:=0; -- W subfield for FP16 data type
 constant register2_fpu_set_W_FP32       :integer:=16; -- W subfield for FP32 data type.
-constant register2_fpu_set_W_INT8       :integer:=32; -- W subfield for INT8 data type.
+constant register2_fpu_set_W_INT16      :integer:=32; -- W subfield for INT16 data type.
 constant register2_fpu_set_W_ZFP16      :integer:=48; -- W subfield for ztachip custom FP16
 constant register2_fpu_set_M_VALUE      :integer:=0; -- M subfield for access by value
 constant register2_fpu_set_M_ADDR       :integer:=8; -- M subfield for access by SRAM address
@@ -1213,6 +1213,20 @@ constant apb_uart_write_avail_c:integer:=72;
 constant apb_time_get_c:integer:=76;
 
 constant apb_time2_get_c:integer:=80;
+
+
+constant apb_spi_config:integer:=84;
+
+constant apb_spi_status:integer:=88;
+
+constant apb_spi_read_req:integer:=92;
+
+constant apb_spi_read:integer:=96;
+
+constant apb_spi_write_req:integer:=100;
+
+constant apb_spi_write:integer:=104;
+
 
 ---------------------------------------------------------------------------
 --                       Function definition
@@ -1554,6 +1568,7 @@ COMPONENT falu_core IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
+        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -1585,6 +1600,7 @@ COMPONENT falu IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
+        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -1639,6 +1655,7 @@ END COMPONENT;
 component fp2int is
    generic
    (
+      WIDTH:integer;
       LATENCY:natural
    );
    port 
@@ -1646,7 +1663,7 @@ component fp2int is
       SIGNAL reset_in    : in std_logic;
       SIGNAL clock_in    : in std_logic;
       SIGNAL x_in        : in fp32_t;
-      SIGNAL y_out       : out std_logic_vector(31 downto 0)
+      SIGNAL y_out       : out std_logic_vector(WIDTH-1 downto 0)
    );
 end component;
 

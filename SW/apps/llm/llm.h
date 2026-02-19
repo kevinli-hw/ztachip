@@ -36,7 +36,12 @@ typedef struct {
     ZUF_QUANT quant;
     uint8_t* q;
     float16_t* s;
-} QuantizedTensor;
+} WeightTensor;
+
+typedef struct {
+    int16_t* q;
+    float16_t* s;
+} ActivationTensor;
 
 #define MAX_LLM_SEQ_LEN  1024
 
@@ -56,7 +61,7 @@ public:
     void ClearStat();
     float GetStatTokPerSec();
 private:
-    void matmul(int req_id,int N,int D,int gs,uint8_t *x_v,float16_t *x_s,QuantizedTensor *w,float16_t *result);
+    void matmul(int req_id,int N,int D,int gs,int16_t *x_v,float16_t *x_s,WeightTensor *w,float16_t *result);
     float16_t* forward(int token, int pos);
     int sampling(float16_t* logits);
     void safe_printf(char *piece);
@@ -82,12 +87,12 @@ private:
     struct {
         // current wave of activations
         float16_t *x; // activation at current time stamp (dim,)
-        QuantizedTensor xq;
+        ActivationTensor xq;
         float16_t *xb; // same, but inside a residual branch (dim,)
-        QuantizedTensor xbq;
+        ActivationTensor xbq;
         float16_t *xb2; // an additional buffer just for convenience (dim,)
         float16_t *hb; // buffer for hidden dimension in the ffn (hidden_dim,)
-        QuantizedTensor hbq;
+        ActivationTensor hbq;
         float16_t *hb2; // buffer for hidden dimension in the ffn (hidden_dim,)
         float16_t *q; // query (dim,)
         float16_t *att; // buffer for scores/attention values (n_heads, seq_len)
@@ -104,14 +109,14 @@ private:
         float* rms_att_weight[MAX_NLAYERS]; // (layer, dim) rmsnorm weights
         float* rms_ffn_weight[MAX_NLAYERS]; // (layer, dim)
         float* rms_final_weight; // (dim,)
-        QuantizedTensor  wqq[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  wkq[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  wvq[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  woq[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  w1q[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  w2q[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  w3q[MAX_NLAYERS]; // Quantized of wq
-        QuantizedTensor  wclsq; // Quantized of wq
+        WeightTensor  wqq[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  wkq[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  wvq[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  woq[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  w1q[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  w2q[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  w3q[MAX_NLAYERS]; // Quantized of wq
+        WeightTensor  wclsq; // Quantized of wq
     } m_weights;
     struct {
         int numTokens;
