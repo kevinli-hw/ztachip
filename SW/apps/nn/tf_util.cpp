@@ -197,15 +197,31 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     const TfliteNnTensorDef* filter, const TfliteNnTensorDef* bias, TfliteNnTensorDef* output,
     const NeuralNetActivation activation, int32_t* multiplier, int32_t* shift,
     int32_t* output_activation_min, int32_t* output_activation_max,
-    int32_t* per_channel_multiplier, int* per_channel_shift) {
+    std::vector<int32_t> *multiplier_per_channel, std::vector<int> *shift_per_channel,
+    bool* per_tensor, bool* per_channel)
+//    int32_t* per_channel_multiplier, int* per_channel_shift) {
 
   // Populate multiplier and shift using affine quantization.
   const int num_channels = filter->quantization.m_scale.size();
   const float input_scale = input->quantization.m_scale[0];
   const float output_scale = output->quantization.m_scale[0];
   const std::vector<float> &filter_scales = filter->quantization.m_scale;
-  if(num_channels != 1) {
-     return ZtaStatusFail;
+  //if(num_channels != 1) {
+  //   return ZtaStatusFail;
+  //}
+  if (num_channels == 1){
+    *per_tensor = true;
+    *per_channel = false;
+  }else{
+    *per_tensor = false;
+    *per_channel = true;
+  }
+  if (num_channels == 1)
+  {
+    //per_tensor quantization
+  }else
+  {
+    //per_channel quantization
   }
   for (int i = 0; i < num_channels; ++i) {
     const double filter_scale = static_cast<double>(filter_scales[i]);
@@ -244,10 +260,13 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   QuantizeMultiplier(real_multiplier, multiplier, &exponent);
   *shift = exponent;
   if (input->type == NeuralNetTensorType_UINT8)
+  {
     CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
+  }
   else
+  {
     CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
-
+  }
   return ZtaStatusOk;
 }
 

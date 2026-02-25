@@ -35,7 +35,7 @@ _kernel_ void inner_product::init(int _out_scale) {
 
 _kernel_ void inner_product::start() {
    _A = biasHi;
-   _A = (_A << (DATA_BIT_WIDTH-2));
+   _A = (_A << (DATA_BIT_WIDTH-1));
    _A += biasLo;
 }
 

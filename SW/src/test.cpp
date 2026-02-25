@@ -1186,7 +1186,8 @@ int test_model(){
    }
 
    assert(rc==ZtaStatusOk);
-   TF2.Create("single_fc_int8.tflite",&input,1,&output);
+   //TF2.Create("single_fc_int8.tflite",&input,1,&output);
+   TF2.Create("single_conv_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -1196,7 +1197,8 @@ int test_model(){
    FLUSH_DATA_CACHE();
    {
    result = (int8_t*)output.GetBuf();
-   printf("single fc result: ");
+   //printf("single fc result: ");
+   printf("single conv result: ");
    for (int i=0; i<10; i++)
    {
       printf("%d ", result[i]);

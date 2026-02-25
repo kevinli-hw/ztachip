@@ -36,7 +36,7 @@ _kernel_ void convolution::start(_global int count) {
    int i;
    for(i=0;i < count;i++) {
       _A[i] = biasHi;
-      _A[i] = (_A[i] << (DATA_BIT_WIDTH-2));
+      _A[i] = (_A[i] << (DATA_BIT_WIDTH-1));
       _A[i] += biasLo;
    }
 }
