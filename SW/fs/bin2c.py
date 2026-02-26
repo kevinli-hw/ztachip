@@ -138,6 +138,15 @@ write_c_array("single_conv_int8", raw_data)
 raw_data = read_file("single_fc_int8.tflite")
 write_c_array("single_fc_int8", raw_data)
 
+raw_data = read_file("mean_model.tflite")
+write_c_array("mean_model", raw_data)
+
+raw_data = read_file("dw_conv.tflite")
+write_c_array("dw_conv", raw_data)
+
+raw_data = read_file("pad_dw_conv.tflite")
+write_c_array("pad_dw_conv", raw_data)
+
 raw_data = read_file("mobilenet_v2_int8.tflite")
 write_c_array("mobilenet_v2_int8", raw_data)
 

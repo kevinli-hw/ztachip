@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
+#include "../../../src/soc.h"
 #include "fcn.h"
 #include "fcn.p.img"
 
@@ -114,7 +115,8 @@ static void pooling(void *_p,int pid) {
    int i,j;
    int from,to;
    int np; 
-   int fmt=UINT8;
+   //int fmt=UINT8;
+   int fmt=INT8;
    int botsz;
    int cnt,step,nt;
 
@@ -138,8 +140,8 @@ static void pooling(void *_p,int pid) {
       nt=NUM_THREAD_PER_CORE;
 
       for(j=0;j < botsz;j += POOL_BOT_SIZE) {
-         >DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
-         >DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
+         > REMAP(1) DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
+         > DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
          >EXE_LOCKSTEP(max_pool::exe,np);
          ztaTaskYield();       
       }
@@ -322,5 +324,6 @@ void kernel_Pooling_exe(
    ztaDualHartExecute(pooling,&req);
 
    ztaJobDone(_req_id);
+   APB[APB_LED]=0x00000007;
 }
 

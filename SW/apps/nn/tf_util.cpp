@@ -200,7 +200,7 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     std::vector<int32_t> *multiplier_per_channel, std::vector<int> *shift_per_channel,
     bool* per_tensor, bool* per_channel)
 //    int32_t* per_channel_multiplier, int* per_channel_shift) {
-
+  {
   // Populate multiplier and shift using affine quantization.
   const int num_channels = filter->quantization.m_scale.size();
   const float input_scale = input->quantization.m_scale[0];
@@ -223,19 +223,19 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   {
     //per_channel quantization
   }
-  for (int i = 0; i < num_channels; ++i) {
-    const double filter_scale = static_cast<double>(filter_scales[i]);
-    const double effective_output_scale = static_cast<double>(input_scale) *
-                                          filter_scale /
-                                          static_cast<double>(output_scale);
-    int32_t significand;
-    int shift;
-    QuantizeMultiplier(effective_output_scale, &significand, &shift);
-    if(per_channel_multiplier)
-      per_channel_multiplier[i] = significand;
-    if(per_channel_shift)
-      per_channel_shift[i] = shift;
-  }
+  //for (int i = 0; i < num_channels; ++i) {
+  //  const double filter_scale = static_cast<double>(filter_scales[i]);
+  //  const double effective_output_scale = static_cast<double>(input_scale) *
+  //                                        filter_scale /
+  //                                        static_cast<double>(output_scale);
+  //  int32_t significand;
+  //  int shift;
+  //  QuantizeMultiplier(effective_output_scale, &significand, &shift);
+  //  if(per_channel_multiplier)
+  //    per_channel_multiplier[i] = significand;
+  //  if(per_channel_shift)
+  //    per_channel_shift[i] = shift;
+  //}
 
   // Populate scalar quantization parameters.
   // This check on legacy quantization parameters is kept only for backward

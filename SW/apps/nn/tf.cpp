@@ -210,7 +210,7 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0);
+                     0,0,0,0);
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
@@ -277,7 +277,7 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0); //per-tensor quantization
+                     0,0,0,0); //per-tensor quantization
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = weights.quantization.m_zeroPoint[0];
@@ -511,6 +511,18 @@ ZtaStatus TfliteNn::Verify() {
                         def.u.pool_avg.filter_w,tflite::Padding_VALID, &out_height, &out_width);
                def.u.pool_avg.pad_w=pad.w;
                def.u.pool_avg.pad_h=pad.h;
+
+               def.u.pool_avg.input_offset = input.quantization.m_zeroPoint[0];
+               def.u.pool_avg.output_offset = output.quantization.m_zeroPoint[0];
+               //printf("mean offset:%ld, %ld\n", def.u.pool_avg.input_offset, def.u.pool_avg.output_offset);
+               //printf("mean scale:%f, %f\n", input.quantization.m_scale[0], output.quantization.m_scale[0]);
+
+               double real_scale = input.quantization.m_scale[0] / output.quantization.m_scale[0];
+               int exponent;
+               QuantizeMultiplier(real_scale, &def.u.pool_avg.multiplier, &exponent);
+               def.u.pool_avg.shift=exponent;
+               printf("mean multiplier, shift: %ld, %ld\n", def.u.pool_avg.multiplier, def.u.pool_avg.shift);
+
                tflite::ActivationFunctionType activation=tflite::ActivationFunctionType_NONE;
                if (output.type == NeuralNetTensorType_UINT8) {
                   CalculateActivationRangeUint8(ParseActivation(activation),

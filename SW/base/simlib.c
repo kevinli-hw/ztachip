@@ -18,7 +18,8 @@
 #include <string.h>
 #include "../src/soc.h"
 //#include "../fs/gen/single_conv_int8.c"
-#include "../fs/gen/single_fc_int8.c"
+//#include "../fs/gen/single_fc_int8.c"
+#include "../fs/gen/mean_model.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
 //#include "../fs/gen/classifier_input.c"
 //#include "../fs/gen/classifier.c"
@@ -112,12 +113,18 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(single_conv_int8);
    //   files[i].body=single_conv_int8;
    //}
-   if(strcmp(name,"single_fc_int8.tflite")==0) {
+   if(strcmp(name,"mean_model.tflite")==0) {
 	    files[i].status=true;
 	    files[i].curr=0;
-      files[i].len=sizeof(single_fc_int8);
-      files[i].body=single_fc_int8;
+      files[i].len=sizeof(mean_model);
+      files[i].body=mean_model;
    }
+   //if(strcmp(name,"single_fc_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_fc_int8);
+   //   files[i].body=single_fc_int8;
+   //}
    //if(strcmp(name,"mobilenet_v2_int8.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;

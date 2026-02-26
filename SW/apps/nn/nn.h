@@ -197,6 +197,10 @@ struct NeuralNetOperatorDef {
          int32_t activation_max;
       } add;
       struct {
+         int32_t input_offset;
+         int32_t output_offset;
+         int32_t multiplier;
+         int32_t shift;
          int32_t stride_w;
          int32_t stride_h;
          int32_t filter_w;

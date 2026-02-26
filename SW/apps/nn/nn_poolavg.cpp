@@ -35,7 +35,9 @@ NeuralNetLayerPoolAvg::~NeuralNetLayerPoolAvg() {
 }
 
 ZtaStatus NeuralNetLayerPoolAvg::Prepare() {
-   m_shmSpu=ztaBuildSpuBundle(1,SpuAvgPool,this,0,0);
+   m_shmSpu=ztaBuildSpuBundle(2,
+                              SpuAvgPool,this,0,0,
+                              SpuEvalInput,this,0,0);
    m_nn->BufferAllocate(m_shmSpu);
    return ZtaStatusOk;
 }
@@ -77,16 +79,27 @@ ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
    return ZtaStatusOk;
 }
 
+int16_t NeuralNetLayerPoolAvg::SpuEvalInput(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2) {
+   NeuralNetLayer *layer=static_cast<NeuralNetLayer *>(pparm);
+   static int32_t offset=0;
+   NeuralNetOperatorDef *op=layer?&((NeuralNetLayerPoolAvg *)layer)->m_def:0;
+   if(op)
+      offset=op->u.pool_avg.input_offset;
+   return (int16_t)(_in-offset);
+}
+
 int16_t NeuralNetLayerPoolAvg::SpuAvgPool(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2)
 {
    NeuralNetLayer *layer=static_cast<NeuralNetLayer *>(pparm);
    NeuralNetOperatorDef *op=layer?&((NeuralNetLayerPoolAvg *)layer)->m_def:0;
-   static float D=0.0;
+   static float D=1.0;
    static float N=0.0;
    static int activation_max=0;
    static int activation_min=0;
+   static int offset = 0;
    if(op) {
       int cnt,bit=0;
+      N=static_cast<float>(op->u.pool_avg.multiplier);
       cnt=op->u.pool_avg.filter_w*op->u.pool_avg.filter_h;
       while(cnt > 0) {
          cnt=cnt>>1;
@@ -97,14 +110,17 @@ int16_t NeuralNetLayerPoolAvg::SpuAvgPool(int16_t _in,void *pparm,uint32_t parm,
       } else if(bit > 1) {
          bit -= 1;
       }
-      D=static_cast<float>(op->u.pool_avg.filter_w*op->u.pool_avg.filter_h);
-      N=static_cast<float>((1<<bit));
+      D=static_cast<float>(op->u.pool_avg.filter_w*op->u.pool_avg.filter_h)*static_cast<float>(1<<(31-op->u.pool_avg.shift));
+      //N=static_cast<float>((1<<bit));
+      N=N*static_cast<float>((1<<bit));
       activation_max=op->u.pool_avg.activation_max;
       activation_min=op->u.pool_avg.activation_min;
       ((NeuralNetLayerPoolAvg *)layer)->m_outputShift=bit;
+      printf("bit: %d\n", bit);
+      offset = op->u.pool_avg.output_offset;
    }
    float _in2;
-   _in2=static_cast<float>((((float)_in*(float)N)/(float)D)+0.5);
+   _in2=static_cast<float>((((float)(_in)*(float)N)/(float)D)+0.5)+offset;
    if(_in2 > activation_max) {
       return static_cast<int16_t>(activation_max);
    } else if(_in2 < activation_min) {
