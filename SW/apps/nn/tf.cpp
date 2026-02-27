@@ -512,28 +512,34 @@ ZtaStatus TfliteNn::Verify() {
                def.u.pool_avg.pad_w=pad.w;
                def.u.pool_avg.pad_h=pad.h;
 
+#ifdef PRINTF_LOG_ON
+               printf("pad.w pad.h: %d, %d\n", pad.w, pad.h);
+#endif
                def.u.pool_avg.input_offset = input.quantization.m_zeroPoint[0];
                def.u.pool_avg.output_offset = output.quantization.m_zeroPoint[0];
-               //printf("mean offset:%ld, %ld\n", def.u.pool_avg.input_offset, def.u.pool_avg.output_offset);
-               //printf("mean scale:%f, %f\n", input.quantization.m_scale[0], output.quantization.m_scale[0]);
+#ifdef PRINTF_LOG_ON
+               printf("mean offset:%ld, %ld\n", def.u.pool_avg.input_offset, def.u.pool_avg.output_offset);
+               printf("mean scale:%f, %f\n", input.quantization.m_scale[0], output.quantization.m_scale[0]);
+#endif
 
                double real_scale = input.quantization.m_scale[0] / output.quantization.m_scale[0];
                int exponent;
                QuantizeMultiplier(real_scale, &def.u.pool_avg.multiplier, &exponent);
                def.u.pool_avg.shift=exponent;
+#ifdef PRINTF_LOG_ON
                printf("mean multiplier, shift: %ld, %ld\n", def.u.pool_avg.multiplier, def.u.pool_avg.shift);
-
+#endif
                tflite::ActivationFunctionType activation=tflite::ActivationFunctionType_NONE;
                if (output.type == NeuralNetTensorType_UINT8) {
                   CalculateActivationRangeUint8(ParseActivation(activation),
                                              &output,
-                                             &def.u.add.activation_min,
-                                             &def.u.add.activation_max);
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
                } else {
                   CalculateActivationRangeInt8(ParseActivation(activation),
                                              &output,
-                                             &def.u.add.activation_min,
-                                             &def.u.add.activation_max);
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
                }
                break;
                }

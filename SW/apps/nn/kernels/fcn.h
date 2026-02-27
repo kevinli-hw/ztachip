@@ -67,6 +67,7 @@ extern void kernel_Pooling_exe(
    int _botcnt,
    int _botdim,
    unsigned int _stream,
+   int _input_offset,
    int _output_shift
 );
 

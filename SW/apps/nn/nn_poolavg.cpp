@@ -58,6 +58,7 @@ ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
           (*op->input_shape[0])[3],
           (*op->input_shape[0])[2],
 	      (unsigned int)m_shmSpu,
+          op->u.pool_avg.input_offset,
           m_outputShift);
    }else if (op->op == NeuralNetOperatorMean)
    {
@@ -72,6 +73,7 @@ ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
           (*op->input_shape[0])[3],
           (*op->input_shape[0])[2],
 	      (unsigned int)m_shmSpu,
+          op->u.pool_avg.input_offset,
           m_outputShift);
    }else{
        assert(0);
@@ -116,7 +118,9 @@ int16_t NeuralNetLayerPoolAvg::SpuAvgPool(int16_t _in,void *pparm,uint32_t parm,
       activation_max=op->u.pool_avg.activation_max;
       activation_min=op->u.pool_avg.activation_min;
       ((NeuralNetLayerPoolAvg *)layer)->m_outputShift=bit;
+#ifdef PRINTF_LOG_ON
       printf("bit: %d\n", bit);
+#endif
       offset = op->u.pool_avg.output_offset;
    }
    float _in2;

@@ -147,7 +147,8 @@ static void convolution_3x3(void *_p,int pid) {
       > $coef_ddr := DTYPE(weightfmt)MEM(coef,botcnt2,topcnt3)[$][rowi:rowi+gkz-1];
       for(r=0,r2=-req->pad;r < req->topdim;r += conv_dy,r2 += stride_dy) {
          for(c=0,c2=-req->pad;c < req->topdim;c += conv_dx,c2+=stride_dx) {
-            > $bot_ddr := PAD(-req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
+            //> $bot_ddr := PAD(-req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
+            > $bot_ddr := PAD(req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
             > convolution::start.count <= INT16(dycnt);
             > EXE_LOCKSTEP(convolution::start,np);
             for(jj=0;jj < botcnt2;jj++) {

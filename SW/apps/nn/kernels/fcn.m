@@ -105,6 +105,7 @@ typedef struct {
    uint32_t top;
    uint32_t bot;
    int output_shift;
+   int input_offset;
    uint32_t stream;
 } RequestPool;
 
@@ -140,8 +141,9 @@ static void pooling(void *_p,int pid) {
       nt=NUM_THREAD_PER_CORE;
 
       for(j=0;j < botsz;j += POOL_BOT_SIZE) {
-         > REMAP(1) DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
-         > DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
+         //> REMAP(1) DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
+         > REMAP(1) DTYPE(fmt) FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
+         > PAD(req->input_offset) DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
          >EXE_LOCKSTEP(max_pool::exe,np);
          ztaTaskYield();       
       }
@@ -302,6 +304,7 @@ void kernel_Pooling_exe(
    int _botcnt,
    int _botdim,
    unsigned int _stream,
+   int _input_offset,
    int _output_shift
 )
 {
@@ -319,11 +322,11 @@ void kernel_Pooling_exe(
    req.botcnt=_botcnt;
    req.botdim=_botdim;
    req.stream=_stream;
+   req.input_offset=_input_offset;
    req.output_shift=_output_shift;
 
    ztaDualHartExecute(pooling,&req);
 
    ztaJobDone(_req_id);
-   APB[APB_LED]=0x00000007;
 }
 

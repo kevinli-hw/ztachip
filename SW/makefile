@@ -15,7 +15,7 @@ PROJ_NAME=ztachip
 #######
 
 UNIT_TEST=yes
-PRINTF_LOG=yes
+PRINTF_LOG=no
 LLM_TEST=no
 
 
