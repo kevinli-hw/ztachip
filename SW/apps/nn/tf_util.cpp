@@ -197,7 +197,7 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     const TfliteNnTensorDef* filter, const TfliteNnTensorDef* bias, TfliteNnTensorDef* output,
     const NeuralNetActivation activation, int32_t* multiplier, int32_t* shift,
     int32_t* output_activation_min, int32_t* output_activation_max,
-    std::vector<int32_t> *multiplier_per_channel, std::vector<int> *shift_per_channel,
+    std::vector<int32_t> *multiplier_per_channel, std::vector<int> *shift_per_channel, std::vector<double> *output_scale_per_channel,
     bool* per_tensor, bool* per_channel)
 //    int32_t* per_channel_multiplier, int* per_channel_shift) {
   {
@@ -221,37 +221,49 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     //per_tensor quantization
   }else
   {
-    //per_channel quantization
+    int max_shift = -31;
+    int32_t significand = 0;
+    int shift = 0;
+
+    for (int i = 0; i < num_channels; ++i) {
+      const double filter_scale = static_cast<double>(filter_scales[i]);
+      const double effective_output_scale = static_cast<double>(input_scale) * filter_scale / static_cast<double>(output_scale);
+      output_scale_per_channel->push_back(effective_output_scale);
+      if (effective_output_scale == 0.) {
+        significand = 0;
+        shift = 0;
+      }else{
+        const double q = frexp(effective_output_scale, &shift);
+        int32_t q_fixed = static_cast<int32_t>(round(q * (1ll << 15)));
+        assert(q_fixed <= (1ll << 15));
+        if (q_fixed == (1ll << 15)) {
+          q_fixed /= 2;
+          ++shift;
+        }
+       if (shift < -31) {
+          shift = 0;
+          q_fixed = 0;
+        }
+        significand = static_cast<int16_t>(q_fixed);
+      }
+      if (shift > max_shift)
+        max_shift = shift;
+      if(multiplier_per_channel)
+        multiplier_per_channel->push_back(significand);
+      if(shift_per_channel)
+        shift_per_channel->push_back(shift);
+    }
+
+    //per-channel multiplier, per-tensor shift
+    for (int i = 0; i < num_channels; i++)
+    {
+      while((*shift_per_channel)[i] < max_shift){
+        (*multiplier_per_channel)[i] /= 2;
+        (*shift_per_channel)[i]++;
+      }
+      (*shift_per_channel)[i] = -(*shift_per_channel)[i];
+    }
   }
-  //for (int i = 0; i < num_channels; ++i) {
-  //  const double filter_scale = static_cast<double>(filter_scales[i]);
-  //  const double effective_output_scale = static_cast<double>(input_scale) *
-  //                                        filter_scale /
-  //                                        static_cast<double>(output_scale);
-  //  int32_t significand;
-  //  int shift;
-  //  QuantizeMultiplier(effective_output_scale, &significand, &shift);
-  //  if(per_channel_multiplier)
-  //    per_channel_multiplier[i] = significand;
-  //  if(per_channel_shift)
-  //    per_channel_shift[i] = shift;
-  //}
-
-  // Populate scalar quantization parameters.
-  // This check on legacy quantization parameters is kept only for backward
-  // compatibility.
-  //if (input->type == NeuralNetTensorType_UINT8) {
-  //  // Check bias scale == input scale * filter scale.
-  //  double real_multiplier = 0.0;
-  //  GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
-  //  int exponent;
-
-  //  // Populate quantization parameteters with multiplier and shift.
-  //  QuantizeMultiplier(real_multiplier, multiplier, &exponent);
-  //  *shift = -exponent;
-  //  CalculateActivationRangeUint8(activation, output, output_activation_min,
-  //                                output_activation_max);
-  //}
   double real_multiplier = 0.0;
   GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
   int exponent;
@@ -260,13 +272,9 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   QuantizeMultiplier(real_multiplier, multiplier, &exponent);
   *shift = exponent;
   if (input->type == NeuralNetTensorType_UINT8)
-  {
     CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
-  }
   else
-  {
     CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
-  }
   return ZtaStatusOk;
 }
 

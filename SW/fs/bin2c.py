@@ -135,6 +135,9 @@ write_c_array("conv7x7_conv_int8", raw_data)
 raw_data = read_file("single_conv_int8.tflite")
 write_c_array("single_conv_int8", raw_data)
 
+raw_data = read_file("single_conv_3x3.tflite")
+write_c_array("single_conv_3x3", raw_data)
+
 raw_data = read_file("single_fc_int8.tflite")
 write_c_array("single_fc_int8", raw_data)
 

@@ -197,6 +197,9 @@ ZtaStatus TfliteNn::Verify() {
                                     padding,
                                     &out_height,
                                     &out_width);
+#ifdef PRINTF_LOG_ON
+               printf("padding: %ld, %ld\n", pad.w, pad.h);
+#endif
                def.u.conv.pad_w=pad.w;
                def.u.conv.pad_h=pad.h;
                def.u.conv.stride_w=stride_w;
@@ -210,7 +213,23 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0,0,0);
+                     &def.output_multiplier_per_channel,
+                     &def.output_shift_per_channel,
+                     &def.output_scale_per_channel,
+                     &def.u.conv.per_tensor,
+                     &def.u.conv.per_channel
+                     );
+               if(def.u.conv.per_tensor)
+                 printf("per_tensor quantization\n");
+               else
+               {
+                 printf("per_channel quantization\n");
+                 for(int i = 0; i < filter.quantization.m_scale.size(); i++)
+                 {
+                    printf("scale, multiplier, shift: %lf, %ld, %d\n", def.output_scale_per_channel[i], def.output_multiplier_per_channel[i], def.output_shift_per_channel[i]);
+                 }
+               }
+
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
@@ -277,7 +296,7 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0,0,0); //per-tensor quantization
+                     0,0,0,0,0); //per-tensor quantization
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = weights.quantization.m_zeroPoint[0];
@@ -513,7 +532,7 @@ ZtaStatus TfliteNn::Verify() {
                def.u.pool_avg.pad_h=pad.h;
 
 #ifdef PRINTF_LOG_ON
-               printf("pad.w pad.h: %d, %d\n", pad.w, pad.h);
+               printf("pad.w pad.h: %ld, %ld\n", pad.w, pad.h);
 #endif
                def.u.pool_avg.input_offset = input.quantization.m_zeroPoint[0];
                def.u.pool_avg.output_offset = output.quantization.m_zeroPoint[0];

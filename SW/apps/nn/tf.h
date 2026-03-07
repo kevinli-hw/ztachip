@@ -89,7 +89,7 @@ private:
             const TfliteNnTensorDef* filter, const TfliteNnTensorDef* bias, TfliteNnTensorDef* output,
             const NeuralNetActivation activation, int32_t* multiplier, int32_t* shift,
             int32_t* output_activation_min, int32_t* output_activation_max,
-            std::vector<int32_t>* multiplier_per_channel,std::vector<int> *shift_per_channel, bool* per_tensor, bool* per_channel);
+            std::vector<int32_t>* multiplier_per_channel,std::vector<int> *shift_per_channel, std::vector<double>* output_scale_per_channel, bool* per_tensor, bool* per_channel);
    ZtaStatus GetQuantizedConvolutionMultipler(const TfliteNnTensorDef* input,
             const TfliteNnTensorDef* filter,
             const TfliteNnTensorDef* bias,

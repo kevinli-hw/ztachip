@@ -20,8 +20,16 @@
 
 vint16 test::_A;
 vint16 test::_Z;
+vint16 test::_B;
+vint32 test::_T;
 
 _kernel_ void test::add() { 
    _VMASK=-1;
    _Z=_A+1;
+}
+_kernel_ void test::quant_mul() { 
+   _VMASK=-1;
+   _T=_A;
+   //_Z=_T*_B;
+   _Z=_A*_B;
 }

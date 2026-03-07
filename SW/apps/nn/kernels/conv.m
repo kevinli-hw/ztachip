@@ -35,6 +35,7 @@ typedef struct {
    uint32_t bot;
    uint32_t top;
    uint32_t top_interleave;
+   uint32_t activation_multiplier;
    int ksz;
    int topcnt;
    int topdim;
@@ -80,10 +81,14 @@ static void convolution_3x3(void *_p,int pid) {
    int dysz,dycnt;
    int dx;
    int kfunc;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt=INT8;
+   //int botfmt=UINT8;
+   int botfmt=INT8;
    int biasfmt=INT16;
-   int weightfmt=UINT8;
+   int multiplierfmt=INT16;
+   //int weightfmt=UINT8;
+   int weightfmt=INT8;
       
    conv_dx=req->conv_dx;
    if(conv_dx <= (NUM_THREAD_PER_CORE/2))
@@ -142,6 +147,7 @@ static void convolution_3x3(void *_p,int pid) {
    for(i=from;i < to;i += step) {
       > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution::biasHi[:] <= DTYPE(biasfmt)MEM(req->biasHi,req->topcnt)[i:i+step-1];
       > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution::biasLo[:] <= DTYPE(biasfmt)MEM(req->biasLo,req->topcnt)[i:i+step-1];
+      > DTYPE(multiplierfmt)PCORE(group,groupsz)[:][*].convolution::activation_multiplier[:] <= DTYPE(multiplierfmt)MEM(req->activation_multiplier,req->topcnt)[i:i+step-1];
       rowi=((i>>VECTOR_DEPTH)*kz)*VECTOR_WIDTH;
       ii=(i/topcnt2)*botcnt2;
       > $coef_ddr := DTYPE(weightfmt)MEM(coef,botcnt2,topcnt3)[$][rowi:rowi+gkz-1];
@@ -169,7 +175,8 @@ static void convolution_3x3(void *_p,int pid) {
             } 
             for(jj=0;jj < dycnt;jj++) {
             > convolution::activate.idx <= INT16(jj);
-            > EXE_LOCKSTEP(convolution::activate,np);
+            //> EXE_LOCKSTEP(convolution::activate,np);
+            > EXE_LOCKSTEP(convolution::activate_per_channel,np);
             }
             ztaTaskYield();
             if(req->out_interleave==kTensorFormatInterleaved || req->out_interleave==kTensorFormatFlatAndInterleaved) {
@@ -217,10 +224,13 @@ static void convolution_1x1(void *_p,int pid) {
    int conv_dx;
    int dysz,dycnt,dycntLast,dzcnt,dycnt2,xy2,xy3,xy4;
    int remain,delta;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt=INT8;
+   //int botfmt=UINT8;
+   int botfmt=INT8;
    int biasfmt=INT16;	
-   int weightfmt=UINT8;
+   //int weightfmt=UINT8;
+   int weightfmt=INT8;
    uint32_t f,f_activate;
    int mindycnt,batchcnt;
    int cnt;
@@ -450,10 +460,13 @@ static void convolution_depthwise(void *_p,int pid) {
    int conv_dx,conv_dy,conv_dy2,conv_dx2;
    int dysz,dycnt,dxcnt;
    int dx;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt=INT8;
+   //int botfmt=UINT8;
+   int botfmt=INT8;
    int biasfmt=INT16;
-   int weightfmt=UINT8;
+   //int weightfmt=UINT8;
+   int weightfmt=INT8;
    int f,loop;
    int count,minCount,interation,minInteration;
    int batchcnt,maxgroupsz,mingroup;
@@ -628,7 +641,8 @@ static void do_add_process(void *_p,int pid)
 {
    RequestAdd *req=(RequestAdd *)_p;
    int i,np,step,step2,from,to;
-   int fmt=UINT8;
+   //int fmt=UINT8;
+   int fmt=INT8;
    np=NUM_PCORE;
 
    step=NUM_PCORE*NUM_THREAD_PER_CORE*VECTOR_WIDTH;
@@ -693,6 +707,7 @@ void kernel_convolution_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -723,6 +738,7 @@ void kernel_convolution_exe(
    req.botdim=_botdim;
    req.input_offset=_input_offset;
    req.activation_scale=_activation_scale;
+   req.activation_multiplier=_activation_multiplier;
    req.stream=_stream;
    req.group=_group;
    req.stride=_stride;
@@ -762,6 +778,7 @@ void kernel_convolution_depthwise_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -792,6 +809,7 @@ void kernel_convolution_depthwise_exe(
    req.botdim=_botdim;
    req.input_offset=_input_offset;
    req.activation_scale=_activation_scale;
+   req.activation_multiplier=_activation_multiplier;
    req.stream=_stream;
    req.group=_group;
    req.stride=_stride;

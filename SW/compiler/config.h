@@ -65,8 +65,8 @@ typedef enum
 {
     ATTR_CONST_P0 = (1<<4),     // Constant in the first word of VLIW packet
     ATTR_CONST_NULL = (1<<5),     // Constant in the second word of VLIW packet
-    ATTR_CONST_RESULT = (1<<6), // Hold result value from ALU 
-    ATTR_CONST_TID = (1<<7), // Hold result value from ALU 
+    ATTR_CONST_RESULT = (1<<6), // Hold result value from ALU
+    ATTR_CONST_TID = (1<<7), // Hold result value from ALU
     ATTR_CONST_XREG = (1<<8)
 } eOpcodeConstantType;
 
@@ -142,6 +142,7 @@ public:
    OPCODE_CMP_EQ=10,
    OPCODE_CMP_NE=11,
    OPCODE_MUL=12,
+   OPCODE_QUANT_MUL=13, // Y = (x1*x2)>>15
    OPCODE_LSB4=15,
    OPCODE_MSB4=16,
    OPCODE_CONV_BFLOAT=17,

@@ -109,8 +109,9 @@ struct NeuralNetOperatorDef {
    std::vector<int> output;
    std::vector<std::vector<int>*> input_shape;
    std::vector<std::vector<int>*> output_shape;
-   std::vector<std::vector<int32_t>*> output_multiplier_per_channel;
-   std::vector<std::vector<int>*> output_shift_per_channel;
+   std::vector<int32_t> output_multiplier_per_channel;
+   std::vector<double> output_scale_per_channel;
+   std::vector<int> output_shift_per_channel;
    std::vector<NeuralNetTensorType> input_type;
    std::vector<NeuralNetTensorType> output_type;
    union {

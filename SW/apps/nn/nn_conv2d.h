@@ -43,6 +43,7 @@ public:
    LayerIoType GetIoType() {return (m_type==ConvolutionTypeDepthWise)?LayerIoTypeInInterleaveOutInterleaveAndOrFlat:LayerIoTypeInFlatOutInterleaveAndOrFlat;}
 private:
    static int16_t SpuEvalActivation(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2);
+   static int16_t SpuEvalActivation_Per_Channel(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2);
    static int16_t SpuEvalInput(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2);
    static int16_t SpuEvalFilter(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2);
    ZtaStatus ConvolutionStrategy(int topcnt, int topdim, int botcnt, int botdim,int ksz,int stride,int num_pcore,
@@ -50,12 +51,14 @@ private:
                                  int max_conv_dx,int max_conv_dy,int max_dycnt);
    ZTA_SHARED_MEM GenConvolutionWeight(uint8_t *_coef,std::vector<int> &shape,int topcnt,int botcnt,int kz);
    ZTA_SHARED_MEM GenFcWeight(uint8_t *_coef,int _topcnt,int _botcnt,int *coef_dim,int *_nthread,int *_npcore);
-   void GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo);
+   //void GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo);
+   void GenBias(int32_t *bias,int biasLen,std::vector<int32_t> bias_shift,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo, bool per_tensor, bool per_channel);
 public:
    ConvolutionType m_type;
    ZTA_SHARED_MEM m_shmFilter;
    ZTA_SHARED_MEM m_shmBiasHi;
    ZTA_SHARED_MEM m_shmBiasLo;
+   ZTA_SHARED_MEM m_shmActivation_multiplier;
    ZTA_SHARED_MEM m_shmSpu;
    union {
       struct {

@@ -5,7 +5,7 @@ BENCH=no
 MULDIV=yes
 PRINTF_LOG=no
 
-SRCS = 	base/simlib.c \
+SRCS = 	base/simplelib.c \
 	base/ztalib.c \
   base/tensor.cpp \
   base/util.c \

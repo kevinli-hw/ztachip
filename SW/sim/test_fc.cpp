@@ -22,23 +22,23 @@ int test_model_2(){
    int8_t* result;
    uint8_t *input_buf;
 
-   std::vector<int> input_dim={3,7,7};
+   std::vector<int> input_dim={7,3,3};
    rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
 
    input_buf=(uint8_t *)input.GetBuf();
-   memset(input_buf,0,3*7*7);
-   for(int i = 0; i < 3; i++)
+   memset(input_buf,0,7*3*3);
+   for(int i = 0; i < 7; i++)
    {
-     for(int j = 0; j < 7; j++)
+     for(int j = 0; j < 3; j++)
      {
-       for(int k = 0; k < 7; k++)
-           input_buf[k+j*7+i*7*7]=k+i+j;
+       for(int k = 0; k < 3; k++)
+           input_buf[k+j*3+i*3*3]=k+i+j;
      }
    }
 
    assert(rc==ZtaStatusOk);
-   TF2.Create("single_fc_int8.tflite",&input,1,&output);
-   //TF2.Create("single_conv_int8.tflite",&input,1,&output);
+   //TF2.Create("single_fc_int8.tflite",&input,1,&output);
+   TF2.Create("single_conv_3x3.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -48,7 +48,8 @@ int test_model_2(){
    FLUSH_DATA_CACHE();
 
    result = (int8_t*)output.GetBuf();
-   printf("single fc result: ");
+   //printf("single fc result: ");
+   printf("single conv result: ");
    for (int i=0; i<10; i++)
    {
       printf("%d ", result[i]);
@@ -134,8 +135,8 @@ int main()
    APB[APB_LED]=0x00000000;
    ztaInit();
 
-   //test_model_2();
-   test_model();
+   test_model_2();
+   //test_model();
    return 0;
 }
 

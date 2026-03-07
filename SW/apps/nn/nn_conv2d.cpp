@@ -46,8 +46,8 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
    int botcnt=(*op->input_shape[0])[3];
    int botdim=(*op->input_shape[0])[1]+2*op->u.conv.pad_w;
    int kz=(*op->u.conv.filter_shape)[1];
-   int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
-   int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+   //int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
+   //int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
   if (op->op == NeuralNetOperatorFC){
    // This is FCN Layer
       topcnt=(*op->output_shape[0])[1];
@@ -81,16 +81,53 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
                            MAX_CONV_Y_DIM);
    }
    // Gen Bias: per_tensor/per_channel
-   //int64_t D=((int64_t)1)<<(31-op->u.conv.output_shift);
-   //int64_t bias=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+   //GenBias((int32_t *)op->u.conv.bias,topcnt,(int32_t)bias,&m_shmBiasHi,&m_shmBiasLo);
+   std::vector<int32_t> bias_shift;
+   int64_t D, temp_bias_shift;
+   if (op->u.conv.per_tensor || op->op == NeuralNetOperatorFC) //per_tensor_conv or FC
+   {
+     //per_tensor bias_shift
+     D=((int64_t)1)<<(31-op->u.conv.output_shift);
+     temp_bias_shift=((op->u.conv.output_activation_min-op->u.conv.output_offset)*D)/(int64_t)op->u.conv.output_multiplier;
+     bias_shift.push_back((int32_t)temp_bias_shift);
+   }else{
+     //per_channel bias_shift
+     int num_channels = topcnt;
+     for (int i=0; i < num_channels; i++)
+     {
+         //D=((int64_t)1)<<(15-op->output_shift_per_channel[i]);
+         temp_bias_shift=(int64_t)(((op->u.conv.output_activation_min-op->u.conv.output_offset))/(double)op->output_scale_per_channel[i]);
+         bias_shift.push_back((int32_t)temp_bias_shift);
+     }
+     printf("per_channel bias_shift: ");
+     for (int i=0; i < num_channels; i++)
+     {
+       printf("%ld ", bias_shift[i]);
+     }
+     printf("\n");
+   }
 
-   GenBias((int32_t *)op->u.conv.bias,topcnt,(int32_t)bias,&m_shmBiasHi,&m_shmBiasLo);
+   GenBias((int32_t *)op->u.conv.bias, topcnt, bias_shift, &m_shmBiasHi, &m_shmBiasLo, op->u.conv.per_tensor, op->u.conv.per_channel);
 
-   m_shmSpu=ztaBuildSpuBundle(3,
+   if (op->u.conv.per_tensor)
+   {
+      m_shmSpu=ztaBuildSpuBundle(3,
                               SpuEvalActivation,this,0,0,
                               SpuEvalInput,this,0,0,
                               SpuEvalFilter,this,0,0);
+   }else{
+      int buf_size = topcnt;
+      ZTA_SHARED_MEM multiplier_p = m_nn->BufferAllocate(buf_size*sizeof(int16_t));
+      int16_t* multiplier = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(multiplier_p);
+      for (int i=0; i< buf_size; i++)
+        multiplier[i] = op->output_multiplier_per_channel[i];
+      m_shmActivation_multiplier=multiplier_p;
 
+      m_shmSpu=ztaBuildSpuBundle(3,
+                              SpuEvalActivation_Per_Channel,this,0,0,
+                              SpuEvalInput,this,0,0,
+                              SpuEvalFilter,this,0,0);
+   }
    m_nn->BufferAllocate(m_shmSpu);
    return ZtaStatusOk;
 }
@@ -166,6 +203,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
              (*op->input_shape[0])[1]+2*op->u.conv.pad_w,
              op->u.conv.input_offset,
              op->u.conv.output_scale,
+         (unsigned int)m_shmActivation_multiplier,
     		 (unsigned int)m_shmSpu,
              1,
              op->u.conv.stride_w,
@@ -193,6 +231,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
          (*op->input_shape[0])[1]+2*op->u.conv.pad_w,
          op->u.conv.input_offset,
          op->u.conv.output_scale,
+     (unsigned int)m_shmActivation_multiplier,
 		 (unsigned int)m_shmSpu,
          1,
          op->u.conv.stride_w,
@@ -249,6 +288,33 @@ int16_t NeuralNetLayerConv2D::SpuEvalActivation(int16_t _in,void *pparm,uint32_t
      x = (x*N+D/2)/D+OFFSET;
    else
      x = (x*N-D/2)/D+OFFSET;
+   if(x < x_min)
+      x=(float)x_min;
+   else if(x > x_max)
+      x=(float)x_max;
+   return FLOAT2INT(x);
+}
+
+int16_t NeuralNetLayerConv2D::SpuEvalActivation_Per_Channel(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2) {
+   NeuralNetLayer *layer=static_cast<NeuralNetLayer *>(pparm);
+   NeuralNetOperatorDef *op=layer?&((NeuralNetLayerConv2D *)layer)->m_def:0;
+
+   static int SCALE=0;
+   static int OFFSET=0;
+   static int64_t x_min=0;
+   static int64_t x_max=0;
+
+   if (op){
+     SCALE = op->output_shift_per_channel[0];
+     OFFSET = op->u.conv.output_offset;
+     x_max=op->u.conv.output_activation_max;
+     x_min=op->u.conv.output_activation_min;
+     //shift is the same value among all channels
+     op->u.conv.output_scale=SCALE;
+   }
+   float x;
+   x = (float)_in;
+   x = x + OFFSET;
    if(x < x_min)
       x=(float)x_min;
    else if(x > x_max)
@@ -394,19 +460,30 @@ ZTA_SHARED_MEM NeuralNetLayerConv2D::GenConvolutionWeight(uint8_t *_coef,std::ve
 
 // Generate bias data block in shared memory
 
-void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo) {
+//void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo) {
+void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,std::vector<int32_t> bias_shift,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo, bool per_tensor, bool per_channel){
    ZTA_SHARED_MEM biasLo_p,biasHi_p;
    int16_t *biasLo,*biasHi;
    int32_t v;
    int16_t hi,lo;
    //int range=(1<<(DATA_BIT_WIDTH-2));
+   if(!per_tensor && !per_channel) {
+      printf("invalid quantization\n");
+      assert (per_tensor || per_channel);
+   }
+
    int range=(1<<(DATA_BIT_WIDTH-1));
    biasHi_p = m_nn->BufferAllocate(biasLen*sizeof(int16_t));
    biasLo_p = m_nn->BufferAllocate(biasLen*sizeof(int16_t));
    biasLo = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasLo_p);
    biasHi = (int16_t *)ZTA_SHARED_MEM_VIRTUAL(biasHi_p);
    for(int i=0;i<biasLen;i++) {
-      v=bias[i]-activationBias;
+      //v=bias[i]-activationBias;
+      if (per_tensor)
+        v=bias[i]-bias_shift[0];
+      else
+        //v=bias[i]-bias_shift[i];
+        v=bias[i];
       hi=(int16_t)(v/range);
       lo=(int16_t)(v%range);
       biasHi[i]=hi;

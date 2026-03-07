@@ -17,9 +17,9 @@
 #include <errno.h>
 #include <string.h>
 #include "../src/soc.h"
-//#include "../fs/gen/single_conv_int8.c"
+#include "../fs/gen/single_conv_3x3.c"
 //#include "../fs/gen/single_fc_int8.c"
-#include "../fs/gen/mean_model.c"
+//#include "../fs/gen/mean_model.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
 //#include "../fs/gen/mobilenet_v2_int8_bs1.c"
 //#include "../fs/gen/classifier_input.c"
@@ -115,24 +115,24 @@ int _open(const char *name, int flags, int mode) {
       errno = ENOENT;
       return -1;
    }
-   //if(strcmp(name,"single_conv_int8.tflite")==0) {
-	 //   files[i].status=true;
-	 //   files[i].curr=0;
-   //   files[i].len=sizeof(single_conv_int8);
-   //   files[i].body=single_conv_int8;
-   //}
+   if(strcmp(name,"single_conv_3x3.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(single_conv_3x3);
+      files[i].body=single_conv_3x3;
+   }
    //if(strcmp(name,"single_fc_int8.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(single_fc_int8);
    //   files[i].body=single_fc_int8;
    //}
-   if(strcmp(name,"mean_model.tflite")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(mean_model);
-      files[i].body=mean_model;
-   }
+   //if(strcmp(name,"mean_model.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(mean_model);
+   //   files[i].body=mean_model;
+   //}
    //else if(strcmp(name,"mobilenet_v2_int8_bs1.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
