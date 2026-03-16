@@ -72,7 +72,8 @@ int test_model(){
    //std::vector<int> input_dim={3,7,7};
    //std::vector<int> input_dim={8,7,7};
    std::vector<int> input_dim={3,4,4};
-   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   //rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   rc = input.Create(TensorDataTypeInt8,TensorFormatInterleaved,TensorObjTypeRGB,input_dim); //DW_conv
 
    //test for conv/fc
    //input_buf=(int8_t *)input.GetBuf();
@@ -101,17 +102,29 @@ int test_model(){
    //  }
    //}
    //test for dw_conv
+   //split
+   //input_buf=(int8_t *)input.GetBuf();
+   //memset(input_buf,0,3*4*4);
+   //for(int i = 0; i < 3; i++)
+   //{
+   //  for(int j = 0; j < 4; j++)
+   //  {
+   //    for(int k = 0; k < 4; k++)
+   //        input_buf[k+j*4+i*4*4]=k+i+j;
+   //  }
+   //}
+   //interleaved
    input_buf=(int8_t *)input.GetBuf();
    memset(input_buf,0,3*4*4);
-   for(int i = 0; i < 3; i++)
+
+   for(int j = 0; j < 4; j++)      // row (H)
    {
-     for(int j = 0; j < 4; j++)
-     {
-       for(int k = 0; k < 4; k++)
-           input_buf[k+j*4+i*4*4]=k+i+j;
-     }
+      for(int k = 0; k < 4; k++)   // col (W)
+      {
+         for(int i = 0; i < 3; i++) // channel (C)
+            input_buf[i + k*3 + j*4*3] = k+i+j;
+      }
    }
-   //input_buf=(int8_t *)input.GetBuf();
 
 
    assert(rc==ZtaStatusOk);

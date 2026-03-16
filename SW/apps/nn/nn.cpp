@@ -55,6 +55,7 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
          break;
       case NeuralNetOperatorConvDepthWise:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionTypeDepthWise);
+         break;
       case NeuralNetOperatorFC:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
          break;
@@ -291,10 +292,11 @@ ZtaStatus NeuralNet::Unload() {
 
 ZtaStatus NeuralNet::AssignInputTensor(bool firstTime) {
    // Check input image is correct dimension,type and format
-   //printf("m_operators[0]->m_def.input_type[0]: %d\n", m_operators[0]->m_def.input_type[0]);
-   //printf("m_input->GetDataType(): %d\n", m_input->GetDataType());
+   printf("m_operators[0]->m_def.input_type[0]: %d\n", m_operators[0]->m_def.input_type[0]);
+   printf("m_input->GetDataType(): %d\n", m_input->GetDataType());
    if(TENSOR::GetTensorSize(*m_operators[0]->m_def.input_shape[0])==TENSOR::GetTensorSize(m_input->m_dim) &&
-      (m_input->GetFormat()==TensorFormatSplit) &&
+      //(m_input->GetFormat()==TensorFormatSplit) &&
+      (m_input->GetFormat()==TensorFormatSplit || m_input->GetFormat()==TensorFormatInterleaved) &&
       ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) ||
       (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT8 && m_input->GetDataType()==TensorDataTypeInt8) ||
       (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT16 && m_input->GetDataType()==TensorDataTypeInt16))) {
