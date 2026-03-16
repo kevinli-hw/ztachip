@@ -17,7 +17,9 @@
 #include <errno.h>
 #include <string.h>
 #include "../src/soc.h"
-#include "../fs/gen/single_conv_3x3.c"
+#include "../fs/gen/dw_conv.c"
+//#include "../fs/gen/single_conv_1x1.c"
+//#include "../fs/gen/single_conv_3x3.c"
 //#include "../fs/gen/single_fc_int8.c"
 //#include "../fs/gen/mean_model.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
@@ -115,12 +117,24 @@ int _open(const char *name, int flags, int mode) {
       errno = ENOENT;
       return -1;
    }
-   if(strcmp(name,"single_conv_3x3.tflite")==0) {
+   if(strcmp(name,"dw_conv.tflite")==0) {
 	    files[i].status=true;
 	    files[i].curr=0;
-      files[i].len=sizeof(single_conv_3x3);
-      files[i].body=single_conv_3x3;
+      files[i].len=sizeof(dw_conv);
+      files[i].body=dw_conv;
    }
+   //if(strcmp(name,"single_conv_1x1.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_1x1);
+   //   files[i].body=single_conv_1x1;
+   //}
+   //if(strcmp(name,"single_conv_3x3.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_3x3);
+   //   files[i].body=single_conv_3x3;
+   //}
    //if(strcmp(name,"single_fc_int8.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;

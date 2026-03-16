@@ -234,6 +234,7 @@ ZtaStatus TfliteNn::Verify() {
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
+               printf("input_offset: %ld, weight_offset: %ld, output_offset: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
                def.u.conv.bias=m_buffers[m_tensors[op->inputs()->Get(2)].m_buffer].buf;

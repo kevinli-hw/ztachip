@@ -132,7 +132,8 @@ extern void kernel_add_exe(
 // Convolution 1x1
 //#define CONV_1X1_BOTSZ 512
 
-#define CONV_1X1_BOTSZ 840
+//#define CONV_1X1_BOTSZ 840
+#define CONV_1X1_BOTSZ 800
 
 #define CONV_1X1_Y_DIM 8
 

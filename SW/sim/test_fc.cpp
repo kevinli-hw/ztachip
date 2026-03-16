@@ -70,7 +70,8 @@ int test_model(){
    int8_t *input_buf;
 
    //std::vector<int> input_dim={3,7,7};
-   std::vector<int> input_dim={8,7,7};
+   //std::vector<int> input_dim={8,7,7};
+   std::vector<int> input_dim={3,4,4};
    rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
 
    //test for conv/fc
@@ -84,27 +85,40 @@ int test_model(){
    //        input_buf[k+j*7+i*7*7]=k+i+j;
    //  }
    //}
+   //input_buf=(int8_t *)input.GetBuf();
+   //memset(input_buf,0,8*7*7);
+   //for(int i = 0; i < 8; i++)
+   //{
+   //  for(int j = 0; j < 7; j++)
+   //  {
+   //    for(int k = 0; k < 7; k++)
+   //    {
+   //       if ((i+j+k) % 2 == 0)
+   //         input_buf[k+j*7+i*7*7] = -((i*j*k)%128);
+   //       else
+   //         input_buf[k+j*7+i*7*7] = ((i*j*k)%128);
+   //    }
+   //  }
+   //}
+   //test for dw_conv
    input_buf=(int8_t *)input.GetBuf();
-   memset(input_buf,0,8*7*7);
-   for(int i = 0; i < 8; i++)
+   memset(input_buf,0,3*4*4);
+   for(int i = 0; i < 3; i++)
    {
-     for(int j = 0; j < 7; j++)
+     for(int j = 0; j < 4; j++)
      {
-       for(int k = 0; k < 7; k++)
-       {
-          if ((i+j+k) % 2 == 0)
-            input_buf[k+j*7+i*7*7] = -((i*j*k)%128);
-          else
-            input_buf[k+j*7+i*7*7] = ((i*j*k)%128);
-       }
+       for(int k = 0; k < 4; k++)
+           input_buf[k+j*4+i*4*4]=k+i+j;
      }
    }
+   //input_buf=(int8_t *)input.GetBuf();
 
 
    assert(rc==ZtaStatusOk);
    //TF2.Create("single_fc_int8.tflite",&input,1,&output);
    //TF2.Create("single_conv_int8.tflite",&input,1,&output);
-   TF2.Create("mean_model.tflite",&input,1,&output);
+   //TF2.Create("mean_model.tflite",&input,1,&output);
+   TF2.Create("dw_conv.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -115,10 +129,11 @@ int test_model(){
    {
    result = (int8_t*)output.GetBuf();
    //printf("single fc result: ");
-   //printf("single conv result: ");
-   printf("mean result: ");
+   printf("single conv result: ");
+   //printf("mean result: ");
    //for (int i=0; i<10; i++)
-   for (int i=0; i<8; i++)
+   for (int i=0; i<2*2*3; i++)
+   //for (int i=0; i<8; i++)
    {
       printf("%d ", result[i]);
    }
@@ -135,8 +150,8 @@ int main()
    APB[APB_LED]=0x00000000;
    ztaInit();
 
-   test_model_2();
-   //test_model();
+   //test_model_2();
+   test_model();
    return 0;
 }
 
