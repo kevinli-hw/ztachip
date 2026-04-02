@@ -24,6 +24,8 @@ extern "C" {
 
 extern void kernel_convolution_depthwise_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -51,6 +53,8 @@ extern void kernel_convolution_depthwise_exe(
 
 extern void kernel_convolution_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -78,6 +82,7 @@ extern void kernel_convolution_exe(
 
 extern void kernel_add_exe(
    unsigned int _req_id,
+   int         _is_int,
    int _size,
    unsigned int _input_0,
    unsigned int _input_1,

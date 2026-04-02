@@ -17,16 +17,20 @@
 #include <errno.h>
 #include <string.h>
 #include "../src/soc.h"
-#include "../fs/gen/dw_conv.c"
+//#include "../fs/gen/add_test_model_int8.c"
+//#include "../fs/gen/pad_dw_conv.c"
+//#include "../fs/gen/dw_conv.c"
+//#include "../fs/gen/conv_pad_dw_int8.c"
+//#include "../fs/gen/one_conv.c"
 //#include "../fs/gen/single_conv_1x1.c"
 //#include "../fs/gen/single_conv_3x3.c"
 //#include "../fs/gen/single_fc_int8.c"
 //#include "../fs/gen/mean_model.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
 //#include "../fs/gen/mobilenet_v2_int8_bs1.c"
-//#include "../fs/gen/classifier_input.c"
-//#include "../fs/gen/classifier.c"
-//#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
+#include "../fs/gen/classifier_input.c"
+#include "../fs/gen/classifier.c"
+#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
 #include "../thirdparty/FatFs/ff.h"
 
 // This file implements functions required by newlib
@@ -117,12 +121,30 @@ int _open(const char *name, int flags, int mode) {
       errno = ENOENT;
       return -1;
    }
-   if(strcmp(name,"dw_conv.tflite")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(dw_conv);
-      files[i].body=dw_conv;
-   }
+   //if(strcmp(name,"pad_dw_conv.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(pad_dw_conv);
+   //   files[i].body=pad_dw_conv;
+   //}
+   //else if(strcmp(name,"dw_conv.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(dw_conv);
+   //   files[i].body=dw_conv;
+   //}
+   //if(strcmp(name,"conv_pad_dw_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(conv_pad_dw_int8);
+   //   files[i].body=conv_pad_dw_int8;
+   //}
+   //if(strcmp(name,"one_conv.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(one_conv);
+   //   files[i].body=one_conv;
+   //}
    //if(strcmp(name,"single_conv_1x1.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
@@ -147,7 +169,13 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(mean_model);
    //   files[i].body=mean_model;
    //}
-   //else if(strcmp(name,"mobilenet_v2_int8_bs1.tflite")==0) {
+   //if(strcmp(name,"add_test_model_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(add_test_model_int8);
+   //   files[i].body=add_test_model_int8;
+   //}
+   //if(strcmp(name,"mobilenet_v2_int8_bs1.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(mobilenet_v2_int8_bs1);
@@ -159,24 +187,24 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(mobilenet_v2_int8);
    //   files[i].body=mobilenet_v2_int8;
    //}
-   //else if(strcmp(name,"classifier_input.bmp")==0) {
-	 // files[i].status=true;
-	 // files[i].curr=0;
-   //   files[i].len=sizeof(classifier_input);
-   //   files[i].body=classifier_input;
-   //}
-   //else if(strcmp(name,"classifier.bin")==0) {
-	 // files[i].status=true;
-	 // files[i].curr=0;
-   //   files[i].len=sizeof(classifier);
-   //   files[i].body=classifier;
-   //}
-   //else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
-	 // files[i].status=true;
-	 // files[i].curr=0;
-   //   files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
-   //   files[i].body=mobilenet_v2_1_0_224_quant;
-   //}
+   if(strcmp(name,"classifier_input.bmp")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(classifier_input);
+      files[i].body=classifier_input;
+   }
+   else if(strcmp(name,"classifier.bin")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(classifier);
+      files[i].body=classifier;
+   }
+   else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
+      files[i].body=mobilenet_v2_1_0_224_quant;
+   }
    else
    {
       if(!usd_is_init) {

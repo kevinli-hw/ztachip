@@ -216,11 +216,9 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     *per_tensor = false;
     *per_channel = true;
   }
-  if (num_channels == 1)
+  if (num_channels > 1)
   {
-    //per_tensor quantization
-  }else
-  {
+    // per-channel quantization
     int max_shift = -31;
     int32_t significand = 0;
     int shift = 0;
@@ -261,9 +259,12 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
         (*multiplier_per_channel)[i] /= 2;
         (*shift_per_channel)[i]++;
       }
+      if ((*shift_per_channel)[i] > 0)
+        assert(0);
       (*shift_per_channel)[i] = -(*shift_per_channel)[i];
     }
   }
+  // per-tensor quantization
   double real_multiplier = 0.0;
   GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
   int exponent;
@@ -271,7 +272,7 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   // Populate quantization parameteters with multiplier and shift.
   QuantizeMultiplier(real_multiplier, multiplier, &exponent);
   *shift = exponent;
-  if (input->type == NeuralNetTensorType_UINT8)
+  if (output->type == NeuralNetTensorType_UINT8)
     CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
   else
     CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);

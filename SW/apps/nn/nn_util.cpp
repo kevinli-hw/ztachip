@@ -104,6 +104,9 @@ ZtaStatus NeuralNet::BufferAllocatePrepare(int bufid,NeuralNetTensorType type,si
       if(m_bufLst[bufid].sz==0)
          m_bufLst[bufid].sz=sz;
       else {
+#ifdef PRINTF_LOG_ON
+         printf("bufid: %d, m_bufLst[bufid] size: %d, needed size: %d\n", bufid, (int)m_bufLst[bufid].sz, (int)sz);
+#endif
          assert(m_bufLst[bufid].sz==sz);
       }
       if(flatFmt) {
@@ -392,4 +395,48 @@ ZtaStatus NeuralNet::GetTop5(uint8_t *prediction,int predictionSize,int *top5)
    return ZtaStatusOk;
 }
 
+
+ZtaStatus NeuralNet::GetTop5_INT(int8_t *prediction,int predictionSize,int *top5)
+{
+  //index
+  int  i0, i1, i2, i3, i4;
+  i0 = 0;
+  i1 = 0;
+  i2 = 0;
+  i3 = 0;
+  i4 = 0;
+  int v,t;
+  //value
+  int  value[5];
+  for(int i=0; i<5; i++)
+      value[i] = -128;
+  for(int i=0; i<predictionSize; i++){
+    if(prediction[i]>value[4] || (prediction[i]==value[4] && i>i4)){
+      i4=i;
+      value[4] = prediction[i];
+      if(prediction[i]>value[3] || (prediction[i]==value[3] && i>i3)){
+        t=i3;i3=i4;i4=t; //swap
+        v=value[3]; value[3]=value[4];value[4]=v;
+        if(prediction[i]>value[2] || (prediction[i]==value[2] && i>i2)){
+          t=i2;i2=i3;i3=t; //swap
+          v=value[2]; value[2]=value[3];value[3]=v;
+          if(prediction[i]>value[1] || (prediction[i]==value[1] && i>i1)){
+            t=i1;i1=i2;i2=t; //swap
+            v=value[1]; value[1]=value[2];value[2]=v;
+            if(prediction[i]>value[0] || (prediction[i]==value[0] && i>i0)){
+              t=i0;i0=i1;i1=t; //swap
+              v=value[0]; value[0]=value[1];value[1]=v;
+            }
+          }
+        }
+      }
+    }
+  }
+  top5[0] = i0;
+  top5[1] = i1;
+  top5[2] = i2;
+  top5[3] = i3;
+  top5[4] = i4;
+  return ZtaStatusOk;
+}
 

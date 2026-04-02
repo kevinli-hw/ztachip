@@ -175,7 +175,22 @@ ZtaStatus TfliteNn::Verify() {
                   padding=conv_params->padding();
                   fused_activation_function=conv_params->fused_activation_function();
                }
-               TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
+               // Padding layer will do nothing, but the conv/dw_conv layer after padding should change the input tensor/shape
+               int input_index = op->inputs()->Get(0);
+               if (i > 0) //no need to deal with the first layer
+               {
+                  const auto* prev_op = operators->Get(i-1);
+                  NeuralNetOperatorDef prev_def;
+                  prev_def.op=oplst[prev_op->opcode_index()];
+                  if (prev_def.op == NeuralNetOperatorPad){
+                    printf("explicit padding\n");
+                    input_index = prev_op->inputs()->Get(0);
+                    padding=tflite::Padding_SAME; //Padding
+                  }
+               }
+
+               //TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
+               TfliteNnTensorDef &input=m_tensors[input_index];
                TfliteNnTensorDef &filter=m_tensors[op->inputs()->Get(1)];
                TfliteNnTensorDef &bias=m_tensors[op->inputs()->Get(2)];
                TfliteNnTensorDef &output=m_tensors[op->outputs()->Get(0)];
@@ -198,6 +213,12 @@ ZtaStatus TfliteNn::Verify() {
                                     &out_height,
                                     &out_width);
 #ifdef PRINTF_LOG_ON
+               if (padding == tflite::Padding_SAME)
+                 printf("Padding_SAME\n");
+               else if (padding == tflite::Padding_VALID)
+                 printf("Padding_VALID\n");
+               else
+                 printf("Incorrect Padding\n");
                printf("padding: %ld, %ld\n", pad.w, pad.h);
 #endif
                def.u.conv.pad_w=pad.w;
@@ -219,22 +240,26 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.per_tensor,
                      &def.u.conv.per_channel
                      );
+#ifdef PRINTF_LOG_ON
                if(def.u.conv.per_tensor)
                  printf("per_tensor quantization\n");
                else
                {
                  printf("per_channel quantization\n");
-                 for(int i = 0; i < filter.quantization.m_scale.size(); i++)
+                 for(int i = 0; i < (int)filter.quantization.m_scale.size(); i++)
                  {
                     printf("scale, multiplier, shift: %lf, %ld, %d\n", def.output_scale_per_channel[i], def.output_multiplier_per_channel[i], def.output_shift_per_channel[i]);
                  }
                }
+#endif
 
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = filter.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
+#ifdef PRINTF_LOG_ON
                printf("input_offset: %ld, weight_offset: %ld, output_offset: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
+#endif
                assert(op->inputs()->size()==3);
                def.u.conv.filter=m_buffers[m_tensors[op->inputs()->Get(1)].m_buffer].buf;
                def.u.conv.bias=m_buffers[m_tensors[op->inputs()->Get(2)].m_buffer].buf;
@@ -422,8 +447,9 @@ ZtaStatus TfliteNn::Verify() {
 
                //def.output_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
                //def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
-               def.output_shape.push_back(&m_tensors[op->outputs()->Get(0)].m_shape);
-               def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
+               //Pad output=input
+               def.output_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
+               def.output_type.push_back(m_tensors[op->inputs()->Get(0)].type);
 
                break;
                }
@@ -504,8 +530,17 @@ ZtaStatus TfliteNn::Verify() {
                def.u.pool_avg.pad_w=pad.w;
                def.u.pool_avg.pad_h=pad.h;
                tflite::ActivationFunctionType activation=pool_params->fused_activation_function();
-               CalculateActivationRangeUint8(ParseActivation(activation),&output,
-                              &def.u.pool_avg.activation_min,&def.u.pool_avg.activation_max);
+               if (output.type == NeuralNetTensorType_UINT8) {
+                  CalculateActivationRangeUint8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
+               } else {
+                  CalculateActivationRangeInt8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
+               }
                break;
                }
             case NeuralNetOperatorMean: {

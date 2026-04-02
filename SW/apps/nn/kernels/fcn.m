@@ -16,7 +16,7 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
-#include <stdbool.h>
+#include <stdint.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
 #include "../../../src/soc.h"
@@ -27,6 +27,7 @@ extern void mycallback(int parm2);
 
 typedef struct {
    uint32_t coef;
+   int     is_int;
    uint32_t biasHi;
    uint32_t biasLo;   
    uint32_t bot;
@@ -54,14 +55,10 @@ static void innerProduct(void *_p,int pid) {
    int coeftopcnt;
    int dx2;
    int index2;
- //  int topfmt=UINT8;
- //  int botfmt=UINT8;
- //  int biasfmt=INT16;
- //  int weightfmt=UINT8;
-   int topfmt=INT8;
-   int botfmt=INT8;
+   int topfmt=req->is_int?INT8:UINT8;
+   int botfmt=req->is_int?INT8:UINT8;
    int biasfmt=INT16;
-   int weightfmt=INT8;
+   int weightfmt=req->is_int?INT8:UINT8;
    
    nthread=req->num_thread;
    coeftopcnt=req->coeftopcnt*IP_CHUNK_SIZE;
@@ -107,6 +104,8 @@ typedef struct {
    int output_shift;
    int input_offset;
    uint32_t stream;
+   int is_int;
+   int is_avg_pool;
 } RequestPool;
 
 // Do pooling layer
@@ -116,8 +115,7 @@ static void pooling(void *_p,int pid) {
    int i,j;
    int from,to;
    int np; 
-   //int fmt=UINT8;
-   int fmt=INT8;
+   int fmt=req->is_int?INT8:UINT8;
    int botsz;
    int cnt,step,nt;
 
@@ -141,9 +139,14 @@ static void pooling(void *_p,int pid) {
       nt=NUM_THREAD_PER_CORE;
 
       for(j=0;j < botsz;j += POOL_BOT_SIZE) {
-         //> REMAP(1) DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
-         > REMAP(1) DTYPE(fmt) FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
-         > PAD(req->input_offset) DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
+         if (req->is_avg_pool){
+            >DTYPE(fmt) CONCURRENT FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <=                                                                               
+            >DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
+         }
+         else{
+            > REMAP(1) DTYPE(fmt) FOR(I=0:np-1) FOR(J=0:nt-1) FOR(K=0:VECTOR_WIDTH-1) PCORE(np)[I].THREAD[J].max_pool::bot[:][K] <= 
+            > PAD(req->input_offset) DTYPE(fmt) MEM(req->bot,cnt,botsz)[i:i+VECTOR_WIDTH*np*nt-1][j:j+POOL_BOT_SIZE-1];
+         }
          >EXE_LOCKSTEP(max_pool::exe,np);
          ztaTaskYield();       
       }
@@ -251,6 +254,7 @@ void kernel_logistic_exe(
 
 void kernel_innerProduct_exe(
    unsigned int _req_id,
+   int         _is_int,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -272,6 +276,7 @@ void kernel_innerProduct_exe(
    ztaInitStream(_stream);
 
    req.coef=_coef;
+   req.is_int=_is_int;
    req.biasHi=_biasHi;
    req.biasLo=_biasLo;
    req.bot=_bot;
@@ -295,6 +300,8 @@ void kernel_innerProduct_exe(
 
 void kernel_Pooling_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_avg_pool,
    unsigned int _bot,
    unsigned int _top,
    int _ksz,
@@ -313,6 +320,8 @@ void kernel_Pooling_exe(
    ztaInitPcore(zta_pcore_img);
    ztaInitStream(_stream);
 
+   req.is_int=_is_int;
+   req.is_avg_pool=_is_avg_pool;
    req.bot=_bot;
    req.top=_top;
    req.ksz=_ksz;

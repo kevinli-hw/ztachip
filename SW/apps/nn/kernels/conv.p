@@ -144,10 +144,37 @@ _kernel_ void convolution_depthwise::exe3x3(_global int k,_global int offset) {
    for(j=0;j < 3;j++) {
       _A[k] += p2[offset+j]*coef[2*3+j];
    }
-   //top[k] = _A[k] >> out_scale;
+   top[k] = _A[k] >> out_scale;
+}
+
+_kernel_ void convolution_depthwise::exe3x3_per_channel(_global int k,_global int offset) {
+   int i,j;
+   vint16 *p2;
+
+   _A[k] = biasHi;
+   _A[k] = (_A[k] << (DATA_BIT_WIDTH-1));
+   _A[k] += biasLo;
+#pragma unroll
+   for(j=0;j < 3;j++) {
+      _A[k] += p[offset+j]*coef[j];
+   }
+   p2 = p+dx;
+#pragma unroll
+   for(i=1;i < 2;i++) {
+#pragma unroll
+      for(j=0;j < 3;j++) {
+         _A[k] += p2[offset+j]*coef[i*3+j];
+      }
+      p2 += dx;
+   }
+#pragma unroll
+   for(j=0;j < 3;j++) {
+      _A[k] += p2[offset+j]*coef[2*3+j];
+   }
    _A[k] = _A[k] * activation_multiplier;
    top[k] = _A[k] >> out_scale;
 }
+
 
 // Convolution 1x1
 

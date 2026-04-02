@@ -16,7 +16,7 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
-#include <stdbool.h>
+#include <stdint.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
 #include "nn.h"
@@ -54,6 +54,8 @@ typedef struct {
    int in_interleave;
    int out_interleave;
    uint32_t stream;
+   int is_int;
+   int is_per_tensor;
 } RequestConv;
 
 // Perform 3x3 convolution
@@ -82,13 +84,13 @@ static void convolution_3x3(void *_p,int pid) {
    int dx;
    int kfunc;
    //int topfmt=UINT8;
-   int topfmt=INT8;
+   int topfmt=req->is_int?INT8:UINT8;
    //int botfmt=UINT8;
-   int botfmt=INT8;
+   int botfmt=req->is_int?INT8:UINT8;
    int biasfmt=INT16;
    int multiplierfmt=INT16;
    //int weightfmt=UINT8;
-   int weightfmt=INT8;
+   int weightfmt=req->is_int?INT8:UINT8;
       
    conv_dx=req->conv_dx;
    if(conv_dx <= (NUM_THREAD_PER_CORE/2))
@@ -153,7 +155,6 @@ static void convolution_3x3(void *_p,int pid) {
       > $coef_ddr := DTYPE(weightfmt)MEM(coef,botcnt2,topcnt3)[$][rowi:rowi+gkz-1];
       for(r=0,r2=-req->pad;r < req->topdim;r += conv_dy,r2 += stride_dy) {
          for(c=0,c2=-req->pad;c < req->topdim;c += conv_dx,c2+=stride_dx) {
-            //> $bot_ddr := PAD(-req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
             > $bot_ddr := PAD(req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
             > convolution::start.count <= INT16(dycnt);
             > EXE_LOCKSTEP(convolution::start,np);
@@ -174,9 +175,13 @@ static void convolution_3x3(void *_p,int pid) {
                }
             } 
             for(jj=0;jj < dycnt;jj++) {
-            > convolution::activate.idx <= INT16(jj);
-            //> EXE_LOCKSTEP(convolution::activate,np);
-            > EXE_LOCKSTEP(convolution::activate_per_channel,np);
+              > convolution::activate.idx <= INT16(jj);
+              if(req->is_per_tensor){
+                > EXE_LOCKSTEP(convolution::activate,np);
+              }
+              else{
+                > EXE_LOCKSTEP(convolution::activate_per_channel,np);
+              }
             }
             ztaTaskYield();
             if(req->out_interleave==kTensorFormatInterleaved || req->out_interleave==kTensorFormatFlatAndInterleaved) {
@@ -225,13 +230,13 @@ static void convolution_1x1(void *_p,int pid) {
    int dysz,dycnt,dycntLast,dzcnt,dycnt2,xy2,xy3,xy4;
    int remain,delta;
    //int topfmt=UINT8;
-   int topfmt=INT8;
+   int topfmt= req->is_int ? INT8:UINT8;
    //int botfmt=UINT8;
-   int botfmt=INT8;
+   int botfmt= req->is_int ? INT8:UINT8;
    int biasfmt=INT16;	
    int multiplierfmt=INT16;
    //int weightfmt=UINT8;
-   int weightfmt=INT8;
+   int weightfmt= req->is_int ? INT8:UINT8;
    uint32_t f,f_activate;
    int mindycnt,batchcnt;
    int cnt;
@@ -289,8 +294,7 @@ static void convolution_1x1(void *_p,int pid) {
       dycnt=(topsz+dysz-1)/dysz;
       if(dycnt > CONV_1X1_Y_DIM)
          dycnt=CONV_1X1_Y_DIM;
-      //while(ROUND(dycnt*dysz,VECTOR_WIDTH) > CONV_1X1_BOTSZ)
-      while(dycnt > 1 && ROUND(dycnt*dysz,VECTOR_WIDTH) > CONV_1X1_BOTSZ)
+      while(ROUND(dycnt*dysz,VECTOR_WIDTH) > CONV_1X1_BOTSZ)
          dycnt--;
       dycntLast=((topsz%(dycnt*dysz))+dysz-1)/dysz;
       xy=dysz*dycnt;
@@ -334,9 +338,12 @@ static void convolution_1x1(void *_p,int pid) {
       }
       from+=topoffset;
       to+=topoffset;
-
-      //f_activate=ztaBuildKernelFunc($convolution1x1::activate,np,conv_dx);
-      f_activate=ztaBuildKernelFunc($convolution1x1::activate_per_channel,np,conv_dx);
+      
+      if(req->is_per_tensor){
+        f_activate=ztaBuildKernelFunc($convolution1x1::activate,np,conv_dx);
+      }else{
+        f_activate=ztaBuildKernelFunc($convolution1x1::activate_per_channel,np,conv_dx);
+      }
 
       > $coef_pcore := REMAP(2) DTYPE(weightfmt)FOR(I=0:dzcnt-1) PCORE(group,groupsz)[:][*].convolution1x1::coef[I][:];
 
@@ -465,13 +472,13 @@ static void convolution_depthwise(void *_p,int pid) {
    int dysz,dycnt,dxcnt;
    int dx;
    //int topfmt=UINT8;
-   int topfmt=INT8;
+   int topfmt= req->is_int ? INT8:UINT8;
    //int botfmt=UINT8;
-   int botfmt=INT8;
+   int botfmt= req->is_int ? INT8:UINT8;
    int biasfmt=INT16;
    int multiplierfmt=INT16;
    //int weightfmt=UINT8;
-   int weightfmt=INT8;
+   int weightfmt= req->is_int ? INT8:UINT8;
    int f,loop;
    int count,minCount,interation,minInteration;
    int batchcnt,maxgroupsz,mingroup;
@@ -580,8 +587,13 @@ static void convolution_depthwise(void *_p,int pid) {
       }
       from+=topoffset;
       to+=topoffset;
-
-      f=ztaBuildKernelFunc($convolution_depthwise::exe3x3,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      
+      if(req->is_per_tensor){
+        f=ztaBuildKernelFunc($convolution_depthwise::exe3x3,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      }
+      else{
+        f=ztaBuildKernelFunc($convolution_depthwise::exe3x3_per_channel,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      }
 
       > $coef_pcore := REMAP(2) DTYPE(weightfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::coef[0:kz-1][:];
 
@@ -638,6 +650,7 @@ static void convolution_depthwise(void *_p,int pid) {
 
 typedef struct {
    int size;
+   int is_int;
    uint32_t input[2];
    uint32_t output;
    uint32_t stream;
@@ -649,8 +662,7 @@ static void do_add_process(void *_p,int pid)
 {
    RequestAdd *req=(RequestAdd *)_p;
    int i,np,step,step2,from,to;
-   //int fmt=UINT8;
-   int fmt=INT8;
+   int fmt=req->is_int? INT8:UINT8;
    np=NUM_PCORE;
 
    step=NUM_PCORE*NUM_THREAD_PER_CORE*VECTOR_WIDTH;
@@ -675,6 +687,7 @@ static void do_add_process(void *_p,int pid)
 
 void kernel_add_exe(
    unsigned int _req_id,
+   int         _is_int,
    int _size,
    unsigned int _input_0,
    unsigned int _input_1,
@@ -688,6 +701,7 @@ void kernel_add_exe(
    ztaInitStream(_stream);
    
    req.size=_size;
+   req.is_int = _is_int;
    req.input[0]=_input_0;
    req.input[1]=_input_1;
    req.output=_output;
@@ -702,6 +716,8 @@ void kernel_add_exe(
 
 void kernel_convolution_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -734,6 +750,8 @@ void kernel_convolution_exe(
    ztaInitStream(_stream);
    
    req.coef=_coef;
+   req.is_int=_is_int;
+   req.is_per_tensor=_is_per_tensor;
    req.biasHi=_biasHi;
    req.biasLo=_biasLo;
    req.bot=_bot;
@@ -773,6 +791,8 @@ void kernel_convolution_exe(
 
 void kernel_convolution_depthwise_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -805,6 +825,8 @@ void kernel_convolution_depthwise_exe(
    ztaInitStream(_stream);
    
    req.coef=_coef;
+   req.is_int=_is_int;
+   req.is_per_tensor=_is_per_tensor;
    req.biasHi=_biasHi;
    req.biasLo=_biasLo;
    req.bot=_bot;

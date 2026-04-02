@@ -24,6 +24,7 @@ extern "C" {
 
 extern void kernel_innerProduct_exe(
    unsigned int _req_id,
+   int         _is_int,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -58,6 +59,8 @@ extern void kernel_logistic_exe(
 
 extern void kernel_Pooling_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_avg_pool,
    unsigned int _bot,
    unsigned int _top,
    int _ksz,

@@ -11,11 +11,11 @@ OUTPUT_ARCH(riscv)
 ENTRY(crtStart)
 
 MEMORY {
-  RAM      (rwx): ORIGIN = 0x00000000, LENGTH = 1m 
+  RAM      (rwx): ORIGIN = 0x00000000, LENGTH = 64m 
 }
 
 _stack_size = 8000;
-_heap_size = 100000;
+_heap_size = 6400000;
 
 SECTIONS {
 

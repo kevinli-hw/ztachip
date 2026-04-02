@@ -141,6 +141,15 @@ write_c_array("single_conv_3x3", raw_data)
 raw_data = read_file("single_conv_1x1.tflite")
 write_c_array("single_conv_1x1", raw_data)
 
+raw_data = read_file("add_test_model_int8.tflite")
+write_c_array("add_test_model_int8", raw_data)
+
+raw_data = read_file("conv_pad_dw_int8.tflite")
+write_c_array("conv_pad_dw_int8", raw_data)
+
+raw_data = read_file("one_conv.tflite")
+write_c_array("one_conv", raw_data)
+
 raw_data = read_file("single_fc_int8.tflite")
 write_c_array("single_fc_int8", raw_data)
 

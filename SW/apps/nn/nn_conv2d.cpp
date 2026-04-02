@@ -99,15 +99,28 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
          temp_bias_shift=(int64_t)(((op->u.conv.output_activation_min-op->u.conv.output_offset))/(double)op->output_scale_per_channel[i]);
          bias_shift.push_back((int32_t)temp_bias_shift);
      }
+#ifdef PRINTF_LOG_ON
      printf("per_channel bias_shift: ");
      for (int i=0; i < num_channels; i++)
      {
        printf("%ld ", bias_shift[i]);
      }
      printf("\n");
+#endif
    }
 
-   GenBias((int32_t *)op->u.conv.bias, topcnt, bias_shift, &m_shmBiasHi, &m_shmBiasLo, op->u.conv.per_tensor, op->u.conv.per_channel);
+   //printf("=== CONV LAYER DEBUG ===\n");
+   //printf("per_tensor=%d\n", op->u.conv.per_tensor);
+   //printf("output_multiplier=%d\n", op->u.conv.output_multiplier);
+   //printf("output_shift=%d\n", op->u.conv.output_shift);
+   //printf("input_offset=%d\n", op->u.conv.input_offset);
+   //printf("weights_offset=%d\n", op->u.conv.weights_offset);
+   //printf("output_offset=%d\n", op->u.conv.output_offset);
+   //printf("activation_min=%d\n", op->u.conv.output_activation_min);
+   //printf("activation_max=%d\n", op->u.conv.output_activation_max);
+   //printf("bias[0]=%d bias[1]=%d\n", ((int32_t*)op->u.conv.bias)[0], ((int32_t*)op->u.conv.bias)[1]);
+
+   //GenBias((int32_t *)op->u.conv.bias, topcnt, bias_shift, &m_shmBiasHi, &m_shmBiasLo, op->u.conv.per_tensor, op->u.conv.per_channel);
 
    if (op->u.conv.per_tensor)
    {
@@ -128,6 +141,9 @@ ZtaStatus NeuralNetLayerConv2D::Prepare() {
                               SpuEvalInput,this,0,0,
                               SpuEvalFilter,this,0,0);
    }
+
+//   printf("output_scale(SCALE)=%d\n", op->u.conv.output_scale);
+
    m_nn->BufferAllocate(m_shmSpu);
    return ZtaStatusOk;
 }
@@ -153,6 +169,7 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
          bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
          kernel_innerProduct_exe(
             (unsigned int)GetJobId(queue),
+            (op->input_type[0] == NeuralNetTensorType_INT8) ? 1 : 0, //is_int
 			(unsigned int)m_shmFilter,
 			(unsigned int)m_shmBiasHi,
 			(unsigned int)m_shmBiasLo,
@@ -173,7 +190,8 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
          bool outInterleave=(m_nn->BufferGetInterleave(op->output[0])!=0);
          kernel_innerProduct_exe(
             (unsigned int)GetJobId(queue),
-			(unsigned int)m_shmFilter,
+            (op->input_type[0] == NeuralNetTensorType_INT8) ? 1 : 0, //is_int
+  		(unsigned int)m_shmFilter,
 			(unsigned int)m_shmBiasHi,
 			(unsigned int)m_shmBiasLo,
 			(unsigned int)m_nn->BufferGetFlat(op->input[0]),
@@ -190,6 +208,8 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
          // Conv
           kernel_convolution_exe(
              (unsigned int)GetJobId(queue),
+            (op->input_type[0] == NeuralNetTensorType_INT8) ? 1 : 0, //is_int
+            op->u.conv.per_tensor ? 1:0, //is_per_tensor
     		 (unsigned int)m_shmFilter,
     		 (unsigned int)m_shmBiasHi,
     		 (unsigned int)m_shmBiasLo,
@@ -218,6 +238,8 @@ ZtaStatus NeuralNetLayerConv2D::Evaluate(int queue) {
       // ConvDepth
       kernel_convolution_depthwise_exe(
          (unsigned int)GetJobId(queue),
+         (op->input_type[0] == NeuralNetTensorType_INT8) ? 1 : 0, //is_int
+         op->u.conv.per_tensor ? 1:0, //is_per_tensor
 		 (unsigned int)m_shmFilter,
 		 (unsigned int)m_shmBiasHi,
 		 (unsigned int)m_shmBiasLo,
@@ -491,9 +513,9 @@ void NeuralNetLayerConv2D::GenBias(int32_t *bias,int biasLen,std::vector<int32_t
 #ifdef PRINTF_LOG_ON
       printf("v: %ld, bias_hi: %d, bias_lo: %d\n", v, hi, lo);
 #endif
-      //assert(std::abs(hi) < range);
-      //assert(std::abs(lo) < range);
-      //assert((hi*range+lo)==v);
+      assert(std::abs(hi) < range);
+      assert(std::abs(lo) < range);
+      assert((hi*range+lo)==v);
    }
    *shmHi=biasHi_p;
    *shmLo=biasLo_p;

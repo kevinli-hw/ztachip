@@ -112,7 +112,9 @@ struct NeuralNetOperatorDef {
    std::vector<int32_t> output_multiplier_per_channel;
    std::vector<double> output_scale_per_channel;
    std::vector<int> output_shift_per_channel;
+   // assume input type will be same for all inputs
    std::vector<NeuralNetTensorType> input_type;
+   // assume output type will be same for all outputs
    std::vector<NeuralNetTensorType> output_type;
    union {
       struct {
@@ -247,6 +249,7 @@ public:
 public:
    // Some supporting functions to interpret results of inference...
    static ZtaStatus GetTop5(uint8_t *prediction,int predictionSize,int *top5);
+   static ZtaStatus GetTop5_INT(int8_t *prediction,int predictionSize,int *top5);
    ZtaStatus LabelLoad(const char *fname);
    const char *LabelGet(int _idx);
 public:
