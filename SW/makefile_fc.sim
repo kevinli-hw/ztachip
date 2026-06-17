@@ -17,6 +17,7 @@ SRCS = 	base/simplelib.c \
 	apps/nn/nn_logistic.cpp \
 	apps/nn/nn_objdect.cpp \
 	apps/nn/nn_poolavg.cpp \
+	apps/nn/nn_poolmax.cpp \
 	apps/nn/nn_reshape.cpp \
 	apps/nn/nn_pad.cpp \
 	apps/nn/nn_util.cpp \

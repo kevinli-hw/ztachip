@@ -56,7 +56,8 @@ static void test(void *_p,int pid) {
    >DTYPE(INT16)PCORE(NUM_PCORE)[0:NUM_PCORE-1].THREAD[0:15].test::_B[0:7] <= DTYPE(INT16)MEM(req->in_p_2)[from:to];
 
    //>EXE_LOCKSTEP(test::add,NUM_PCORE);
-   >EXE_LOCKSTEP(test::quant_mul,NUM_PCORE);
+   //>EXE_LOCKSTEP(test::quant_mul,NUM_PCORE);
+   >EXE_LOCKSTEP(test::shift_r_v,NUM_PCORE);
 
    ztaTaskYield();
 
@@ -83,7 +84,7 @@ void kernel_test_exe() {
    for(i=0;i < req.len;i++)
       inbuf[i]=(i&0xFF);
    for(i=0;i < req.len;i++)
-      inbuf_2[i]=2;
+      inbuf_2[i]=(i&0x1F);
 
 
    FLUSH_DATA_CACHE();
@@ -99,7 +100,7 @@ void kernel_test_exe() {
    }   
 
    for(i=0;i < req.len;i++) {
-      if(outbuf[i] != ((i&0xFF)+1)) {
+      if(outbuf[i] != ((i&0xFF)>>(i&0x1F))) {
          for(;;) {
             APB[0]=0xffffffff;
          }

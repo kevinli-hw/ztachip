@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 #include "soc.h"
 #include "../base/zta.h"
 #include "../base/util.h"
@@ -1103,9 +1104,11 @@ void test_mobinet()
             //printf first10
             printf("[Layer %3d] %-9s first10:[ ",step, opName);
             int n = (H*W < PRINT_N) ? H*W : PRINT_N;
+            int off = H*W - n;
             const int8_t *ch_last = buf + (C - 1) * H * W;
             for (int i = 0; i < n; i++)
               printf("%d ", (uint8_t)buf[i]);  // ch0 [0..n-1] first channel
+              //printf("%d ", (int)buf[off+i]);  // ch0 [H*W-n..H*W-1] first channel
               //printf("%d ", (int)ch_last[i]);  // ch0 [0..n-1] last channel
 
             printf("]\n");
@@ -1126,8 +1129,10 @@ void test_mobinet()
             //printf first10
             printf("[Layer %3d] %-9s first10:[ ",step, opName);
             int n = (H*W < PRINT_N) ? H*W : PRINT_N;
+            int off = H*W - n;
             for (int i = 0; i < n; i++)
               printf("%d ", (uint8_t)buf[i*C]);  // ch0 [0..n-1] first channel
+              //printf("%d ", (int)buf[(off+i)*C]);  // ch0 [H*W-n..H*W-1] first channel
               //printf("%d ", (int)buf[i * C + (C - 1)]); //last channel
             printf("]\n");
          } else {
@@ -1144,18 +1149,18 @@ void test_mobinet()
 
    //graph.RunUntilCompletion();
    FLUSH_DATA_CACHE();
-//   {
-//   size_t size=output.GetBufLen();
-//   uint8_t *p=(uint8_t *)malloc(size);
-//   FILE *fp=fopen("classifier.bin","rb");
-//   assert(fp);
-//   if(fread(p,1,size,fp) != size) {
-//      assert(0);
-//   }
-//   if(memcmp(p,output.GetBuf(),size) != 0) {
-//      assert(0);
-//   }
-//   printf("correct\n");
+   {
+   size_t size=output.GetBufLen();
+   uint8_t *p=(uint8_t *)malloc(size);
+   FILE *fp=fopen("classifier.bin","rb");
+   assert(fp);
+   if(fread(p,1,size,fp) != size) {
+      assert(0);
+   }
+   if(memcmp(p,output.GetBuf(),size) != 0) {
+      assert(0);
+   }
+   printf("correct\n");
 //   int top5[5];
 //   uint8_t *probability=(uint8_t *)output.GetBuf();
 //   NeuralNet::GetTop5(probability,output.GetBufLen(),top5);
@@ -1165,7 +1170,7 @@ void test_mobinet()
 //   }
 //   fclose(fp);
 //   free(p);
-//   }
+   }
 
    TF2.Unload();
 }
@@ -1263,7 +1268,6 @@ void test_mobinet_ssd()
 
 // ztachip test suite...
 int test_model(){
-   printf("model test start.\n");
    TENSOR input;
    TENSOR output;
    Graph graph;
@@ -1275,34 +1279,76 @@ int test_model(){
    int input_buf_cnt = 0;
    int output_buf_cnt = 0;
    //std::vector<int> input_dim={2,3,3};
-   std::vector<int> input_dim={3,4,4};
+   //std::vector<int> input_dim={3,4,4};
+   //std::vector<int> input_dim={4,4,4};
+   //std::vector<int> input_dim={2,56,56};
+   //std::vector<int> input_dim={4,2,2};
+   //std::vector<int> input_dim={16,112,112};
+   //std::vector<int> input_dim={1,4,4};
+   //std::vector<int> input_dim={1,5,5};
+   //std::vector<int> input_dim={1,28,28};
+   std::vector<int> input_dim={3,224,224};
+   //std::vector<int> input_dim={64,56,56};
+   //std::vector<int> input_dim={3,2,2};
+   //std::vector<int> input_dim={3,8,8};
    //std::vector<int> input_dim={7,3,3};
    //std::vector<int> input_dim={3,7,7};
    //std::vector<int> input_dim={8,7,7};
-   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   //rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeUnknown,input_dim); // input_ch \= 3
    //rc = input.Create(TensorDataTypeInt8,TensorFormatInterleaved,TensorObjTypeRGB,input_dim); //DW_conv only
 
-   //test for conv/fc
+   ////test for conv/fc
    input_buf_cnt=input_dim[0]*input_dim[1]*input_dim[2];
-   output_buf_cnt = 4*4*4;
+   //output_buf_cnt = 96*112*112;
    input_buf=(int8_t *)input.GetBuf();
    memset(input_buf,0,input_buf_cnt);
+   //FILE* fp = fopen("mnist_test_label_0.bin", "rb");
+   FILE* fp = fopen("ILSVRC2012_val_00000001_raw.bin", "rb");
+   assert(fp);
+
+   fread(input_buf, 1, 3*224*224, fp);
+   fclose(fp);
+   //fread(input.GetBuf(), 1, 1*28*28, fp);
+   //fclose(fp);
+
+   //const float scale = 0.003921568859368563f;
+   //const int zero_point = -128;
+   //float data_f;
+   //int data_q;
+
+   //for (int i = 0; i < 28 * 28; i++) {
+   //   data_f = ((float)tmp[i]) / 255.0f;
+   //   data_q = (int)roundf(data_f / scale) + zero_point;
+   //   if (data_q > 127)
+   //       data_q = 127;
+   //   else if (data_q < -128)
+   //       data_q = -128;
+
+   //   input_buf[i] = (int8_t)(data_q);
+   //}
+   //FILE* fp = fopen("op003_conv2d_input.bin", "rb");
+   ////FILE* fp = fopen("op003_conv2d_input_fpga.bin", "rb");
+   //assert(fp);
+   //fread(input.GetBuf(), 1, 16*112*112, fp);
+   //fclose(fp);
    //split
-   for(int i = 0; i < input_dim[0]; i++)
-   {
-     for(int j = 0; j < input_dim[1]; j++)
-     {
-       for(int k = 0; k < input_dim[2]; k++)
-           input_buf[k+j*input_dim[1]+i*input_dim[1]*input_dim[2]]=(k+i+j)%128;
-     }
-   }
-   //interleaved
-   //for(int j = 0; j < 4; j++)      // row (H)
+   //for(int i = 0; i < input_dim[0]; i++)
    //{
-   //   for(int k = 0; k < 4; k++)   // col (W)
+   //  for(int j = 0; j < input_dim[1]; j++)
+   //  {
+   //    for(int k = 0; k < input_dim[2]; k++)
+   //        input_buf[k+j*input_dim[2]+i*input_dim[1]*input_dim[2]]=(k+i+j)%128;
+   //        //input_buf[k+j*input_dim[2]+i*input_dim[1]*input_dim[2]]=-((k+i+j)%128);
+   //  }
+   //}
+   //interleaved
+   //for(int j = 0; j < input_dim[2]; j++)      // row (H)
+   //{
+   //   for(int k = 0; k < input_dim[1]; k++)   // col (W)
    //   {
-   //      for(int i = 0; i < 3; i++) // channel (C)
-   //         input_buf[i + k*3 + j*4*3] = k+i+j;
+   //      for(int i = 0; i < input_dim[0]; i++) // channel (C)
+   //         input_buf[i + k*input_dim[0] + j*input_dim[1]*input_dim[0]] = (k+i+j)%128;
    //   }
    //}
    //input_buf=(int8_t *)input.GetBuf();
@@ -1326,9 +1372,21 @@ int test_model(){
    //TF2.Create("single_fc_int8.tflite",&input,1,&output);
    //TF2.Create("single_conv_3x3.tflite",&input,1,&output);
    //TF2.Create("single_conv_1x1.tflite",&input,1,&output);
+   //TF2.Create("single_conv_56x56x64.tflite",&input,1,&output);
+   //TF2.Create("single_conv_1x1x96.tflite",&input,1,&output);
+   //TF2.Create("single_op003_conv2d.tflite",&input,1,&output);
+   //TF2.Create("single_maxpool_int8.tflite",&input,1,&output);
+   //TF2.Create("single_maxpool3x3s2.tflite",&input,1,&output);
+   // TF2.Create("lenet_mnist_int8.tflite",&input,1,&output);
+   //TF2.Create("resnet50_int8_bs1.tflite",&input,1,&output);
+   TF2.Create("resnet18_full_integer_quant.tflite",&input,1,&output);
+   //TF2.Create("single_conv_56x56.tflite",&input,1,&output);
+   //TF2.Create("single_conv_1x1_8x8.tflite",&input,1,&output);
    //TF2.Create("dw_conv.tflite",&input,1,&output);
    //TF2.Create("conv_pad_dw_int8.tflite",&input,1,&output);
-   TF2.Create("one_conv.tflite",&input,1,&output);
+   //TF2.Create("conv_dw_conv_int8.tflite",&input,1,&output);
+   //TF2.Create("conv_pad_dw_int8_ch8.tflite",&input,1,&output);
+   //TF2.Create("one_conv.tflite",&input,1,&output);
    //TF2.Create("pad_dw_conv.tflite",&input,1,&output);
    //TF2.Create("add_test_model_int8.tflite",&input,1,&output);
    //TF2.Create("mean_model.tflite",&input,1,&output);
@@ -1337,288 +1395,20 @@ int test_model(){
 
    FLUSH_DATA_CACHE();
    graph.Prepare();
+
+#ifdef STEP_MODE_ON
    //step mode
 // ---- 替换 graph.RunUntilCompletion() ----
 {
    const char *opNames[] = {
       "Conv2D","DepthWise","Concat","Logistic",
-      "Reshape","Pad","Detect","Add","AvgPool","FC","Mean","Unknown"
-   };
-
-   int totalLayers = (int)TF2.m_operators.size();
-   printf("Total layers: %d\n", totalLayers);
-
-//   for (int step = 0; step < totalLayers; step++) {
-//
-//       // 1. 提交 / 等待 / 刷 cache（不变）
-//       ZtaStatus rc = TF2.Execute(0, 0);
-//       while (!TF2.AllRequestAreCompleted(0)) {
-//           GraphNode::CheckResponse();
-//       }
-//       FLUSH_DATA_CACHE();
-//
-//       // 2. 获取层信息
-//       NeuralNetLayer *layer = TF2.m_operators[step];
-//       int opCode = layer->m_def.op;
-//       const char *opName = (opCode >= 0 && opCode < 12) ? opNames[opCode] : "Unknown";
-//
-//       // 3. 解析 shape
-//       int B = 1, H = 1, W = 1, C = 1;
-//       if (!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
-//           const auto &sh = *layer->m_def.output_shape[0];
-//           int nd = (int)sh.size();
-//           if      (nd >= 4) { B=sh[0]; H=sh[1]; W=sh[2]; C=sh[3]; }
-//           else if (nd == 3) { B=sh[0]; H=sh[1]; W=sh[2]; C=1;     }
-//           else if (nd == 2) { B=sh[0]; H=1;     W=1;     C=sh[1]; }
-//           else if (nd == 1) { B=1;     H=1;     W=1;     C=sh[0]; }
-//       }
-//
-//       if (layer->m_def.output.empty()) {
-//           printf("[Layer %3d] %s: no output, skip\n", step, opName);
-//           continue;
-//       }
-//       int outBufId = layer->m_def.output[0];
-//
-//       // -------------------------------------------------------
-//       // 4. 每层单独开一个文件：layer_000_Conv2D.txt
-//       // -------------------------------------------------------
-//       char filename[64];
-//       snprintf(filename, sizeof(filename), "layer_%03d_%s.txt", step, opName);
-//
-//       FILE *fout = fopen(filename, "w");
-//       if (!fout) {
-//           printf("[Layer %3d] ERROR: cannot open %s\n", step, filename);
-//           continue;
-//       }
-//
-//       fprintf(fout, "layer=%d  op=%s  shape=[%d,%d,%d,%d]\n\n",
-//               step, opName, B, H, W, C);
-//
-//       // 5. 写 CHW 数据
-//       if (TF2.BufferFlatPresent(outBufId)) {
-//           const int8_t *buf = (const int8_t *)TF2.BufferGetFlat(outBufId);
-//           fprintf(fout, "format=flat(NCHW)\n");
-//           for (int c = 0; c < C; c++) {
-//               fprintf(fout, "\n# ch %d:\n", c);
-//               for (int h = 0; h < H; h++) {
-//                   for (int w = 0; w < W; w++)
-//                       fprintf(fout, "%5d", (int)buf[c*H*W + h*W + w]);
-//                   fprintf(fout, "\n");
-//               }
-//           }
-//       } else if (TF2.BufferInterleavePresent(outBufId)) {
-//           const int8_t *buf = (const int8_t *)TF2.BufferGetInterleave(outBufId);
-//           fprintf(fout, "format=interleave(NHWC)\n");
-//           for (int c = 0; c < C; c++) {
-//               fprintf(fout, "\n# ch %d:\n", c);
-//               for (int h = 0; h < H; h++) {
-//                   for (int w = 0; w < W; w++)
-//                       fprintf(fout, "%5d", (int)buf[h*W*C + w*C + c]);
-//                   fprintf(fout, "\n");
-//               }
-//           }
-//       } else {
-//           fprintf(fout, "no buffer\n");
-//       }
-//
-//       fclose(fout);  // ← 每层写完立刻关闭
-//
-//       printf("[Layer %3d] %-9s → %s\n", step, opName, filename);
-//   }
-
-   for(int step = 0; step < totalLayers; step++) {
-
-      // 1. 提交当前层到硬件（stepMode=0 = 只跑一层就返回）
-      ZtaStatus rc = TF2.Execute(0, 0);
-
-      // 2. 等待硬件完成（轮询响应队列）
-      while(!TF2.AllRequestAreCompleted(0)) {
-         GraphNode::CheckResponse();
-      }
-
-      // 3. 刷 cache，让 CPU 看到硬件写回的结果
-      FLUSH_DATA_CACHE();
-
-      // 4. 打印该层输出的 min/max
-      NeuralNetLayer *layer = TF2.m_operators[step];
-      int opCode = layer->m_def.op;
-      const char *opName = (opCode >= 0 && opCode < 12) ? opNames[opCode] : "Unknown";
-
-      if(!layer->m_def.output.empty()) {
-         int outBufId = layer->m_def.output[0];
-
-         if(TF2.BufferFlatPresent(outBufId)) {
-            int8_t *buf = (int8_t *)TF2.BufferGetFlat(outBufId);
-
-            // 计算元素总数（output_shape 第0维是 batch=1，全部相乘）
-            size_t count = 1;
-            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
-               for(int d : *layer->m_def.output_shape[0]) count *= (size_t)d;
-            }
-
-            // 求 min / max
-            int minVal = 127, maxVal = -128;
-            for(size_t i = 0; i < count; i++) {
-               int v = (int)buf[i];
-               if(v < minVal) minVal = v;
-               if(v > maxVal) maxVal = v;
-            }
-
-            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d\n",
-                   step, opName, outBufId, count, minVal, maxVal);
-            //printf first8
-            printf("[Layer %3d] %-9s first8:[ ",step, opName);
-            for (int i=0; i<count; i++)
-              printf("%d ", buf[i]);
-            printf("]\n");
-
-         } else if(TF2.BufferInterleavePresent(outBufId)) {
-            int8_t *buf = (int8_t *)TF2.BufferGetInterleave(outBufId);
-
-            // interleaved 格式有 channel 对齐 padding，实际分配比 count 大
-            // 但 min/max 与顺序无关，扫 count 个有效元素即可
-            size_t count = 1;
-            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
-                for(int d : *layer->m_def.output_shape[0]) count *= (size_t)d;
-            }
-
-            int minVal = 127, maxVal = -128;
-            for(size_t i = 0; i < count; i++) {
-                int v = (int)buf[i];
-                if(v < minVal) minVal = v;
-                if(v > maxVal) maxVal = v;
-            }
-            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d [interleaved]\n",
-                   step, opName, outBufId, count, minVal, maxVal);
-
-            //printf first8
-            printf("[Layer %3d] %-9s first8:[ ",step, opName);
-            for (int i=0; i<count; i++)
-              printf("%d ", buf[i]);
-            printf("]\n");
-         } else {
-            printf("[Layer %3d] %-9s out_buf=%-3d [no buffer]\n",
-                   step, opName, outBufId);
-         }
-      }
-
-      if(rc == ZtaStatusOk) break; // 最后一层完成
-   }
-}
-//   graph.RunUntilCompletion();
-   FLUSH_DATA_CACHE();
-   {
-   result = (int8_t*)output.GetBuf();
-   //printf("single fc result: ");
-   printf("single model result: ");
-   //printf("single conv result: ");
-   //printf("mean result: ");
-   for (int i=0; i<output_buf_cnt; i++)
-   //for (int i=0; i<10; i++)
-   {
-      printf("%d ", result[i]);
-   }
-   printf("\n");
-   }
-
-   TF2.Unload();
-   return 0;
-}
-
-int test_mobilenet_v2(){
-   printf("mobilenet test start.\n");
-   TENSOR input;
-   TENSOR output;
-   Graph graph;
-   ZtaStatus rc;
-   TfliteNn TF2;
-   int8_t *input_buf;
-
-   std::vector<int> input_dim={3,224,224};
-   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
-   //rc=input.CreateWithBitmap("classifier_input.bmp");
-   assert(rc==ZtaStatusOk);
-
-   input_buf=(int8_t *)input.GetBuf();
-   memset(input_buf,0,3*224*224);
-   for(int i = 0; i < 3; i++)
-   {
-     for(int j = 0; j < 224; j++)
-     {
-       for(int k = 0; k < 224; k++)
-           input_buf[k+j*224+i*224*224]=(k+i+j)%128;
-     }
-   }
-
-   TF2.Create("mobilenet_v2_int8_bs1.tflite",&input,1,&output);
-   //TF2.Create("mobilenet_v2_1_0_224_quant.tflite",&input,1,&output);
-   graph.Add(&TF2);
-   graph.Verify();
-
-   FLUSH_DATA_CACHE();
-   graph.Prepare();
-//   graph.RunUntilCompletion();
-
-   //step mode
-// ---- 替换 graph.RunUntilCompletion() ----
-{
-   const char *opNames[] = {
-      "Conv2D","DepthWise","Concat","Logistic",
-      "Reshape","Pad","Detect","Add","AvgPool","FC","Mean","Unknown"
+      "Reshape","Pad","Detect","Add","AvgPool","MaxPool","FC","Mean","Unknown"
    };
 
    int totalLayers = (int)TF2.m_operators.size();
    printf("Total layers: %d\n", totalLayers);
 
    for(int step = 0; step < totalLayers; step++) {
-
-
-    // ── 在 layer 5 执行前，打印它的输入 ──────────────────────
-    if (step == 5) {
-        NeuralNetLayer *dw = TF2.m_operators[5];
-        NeuralNetLayer *conv3 = TF2.m_operators[3];
-
-        int dw_inBuf   = dw->m_def.input[0];
-        int conv3_outBuf = conv3->m_def.output[0];
-
-        // 1. 先验证 buf ID 是否一致（prune 后应该相同）
-        printf("[CHECK] Layer5.input[0] buf_id=%d, Layer3.output[0] buf_id=%d  %s\n",
-               dw_inBuf, conv3_outBuf,
-               (dw_inBuf == conv3_outBuf) ? "MATCH" : "MISMATCH!!!");
-
-        // 2. 打印 Layer5 input 的 ch0 前10个值
-        const auto &sh = *dw->m_def.input_shape[0];
-        int H = sh.size()>=4?sh[1]:1, W=sh.size()>=4?sh[2]:1, C=sh.size()>=4?sh[3]:1;
-        printf("[Layer  5] DW_input  H=%d W=%d C=%d  ch0_first10: ", H, W, C);
-
-        if (TF2.BufferInterleavePresent(dw_inBuf)) {
-            const int8_t *buf = (const int8_t *)TF2.BufferGetInterleave(dw_inBuf);
-            for (int i = 0; i < 10; i++)
-                printf("%d ", (int)buf[i * C]);  // NHWC: step=C 取 ch0
-        } else if (TF2.BufferFlatPresent(dw_inBuf)) {
-            const int8_t *buf = (const int8_t *)TF2.BufferGetFlat(dw_inBuf);
-            for (int i = 0; i < 10; i++)
-                printf("%d ", (int)buf[i]);      // NCHW: ch0 连续
-        } else {
-            printf("[no buffer]");
-        }
-        printf("\n");
-
-        // 3. 同时打印 Layer3 output 用同一 buf_id 的值作对照
-        printf("[Layer  3] Conv_output same buf  ch0_first10: ");
-        if (TF2.BufferInterleavePresent(conv3_outBuf)) {
-            const int8_t *buf = (const int8_t *)TF2.BufferGetInterleave(conv3_outBuf);
-            const auto &sh3 = *conv3->m_def.output_shape[0];
-            int C3 = sh3.size()>=4?sh3[3]:1;
-            for (int i = 0; i < 10; i++)
-                printf("%d ", (int)buf[i * C3]);
-        } else if (TF2.BufferFlatPresent(conv3_outBuf)) {
-            const int8_t *buf = (const int8_t *)TF2.BufferGetFlat(conv3_outBuf);
-            for (int i = 0; i < 10; i++)
-                printf("%d ", (int)buf[i]);
-        }
-        printf("\n");
-    }
 
       // 1. 提交当前层到硬件（stepMode=0 = 只跑一层就返回）
       ZtaStatus rc = TF2.Execute(0, 0);
@@ -1654,7 +1444,6 @@ int test_mobilenet_v2(){
          if(TF2.BufferFlatPresent(outBufId)) {
             int8_t *buf = (int8_t *)TF2.BufferGetFlat(outBufId);
 
-            // 计算元素总数（output_shape 第0维是 batch=1，全部相乘）
             // 求 min / max
             for(size_t i = 0; i < count; i++) {
                int v = (int)buf[i];
@@ -1662,14 +1451,262 @@ int test_mobilenet_v2(){
                if(v > maxVal) maxVal = v;
             }
 
-            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d\n",
+            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d",
                    step, opName, outBufId, count, minVal, maxVal);
+            printf(" shape=[");
+            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+               bool firstDim = true;
+               for(int d : *layer->m_def.output_shape[0]) {
+                  printf("%s%d", firstDim ? "" : ",", d);
+                  firstDim = false;
+               }
+            }
+            printf("]\n");
+
+
+            //printf first8
+            int n = (count < PRINT_N) ? count : PRINT_N;
+            printf("[Layer %3d] %-9s data:[ ",step, opName);
+            for (int i=0; i<count; i++)
+              printf("%d ", buf[i]);
+            printf("]\n");
+
+         } else if(TF2.BufferInterleavePresent(outBufId)) {
+            int8_t *buf = (int8_t *)TF2.BufferGetInterleave(outBufId);
+
+            for(size_t i = 0; i < count; i++) {
+                int v = (int)buf[i];
+                if(v < minVal) minVal = v;
+                if(v > maxVal) maxVal = v;
+            }
+            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d [interleaved]",
+                   step, opName, outBufId, count, minVal, maxVal);
+            printf(" shape=[");
+            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+               bool firstDim = true;
+               for(int d : *layer->m_def.output_shape[0]) {
+                  printf("%s%d", firstDim ? "" : ",", d);
+                  firstDim = false;
+               }
+            }
+            printf("]\n");
+
+
+            //printf first8
+            printf("[Layer %3d] %-9s data:[ ",step, opName);
+            int n = (count < PRINT_N) ? count : PRINT_N;
+            for (int i=0; i<count; i++)
+              printf("%d ", buf[i]);
+            printf("]\n");
+         } else {
+            printf("[Layer %3d] %-9s out_buf=%-3d [no buffer]\n",
+                   step, opName, outBufId);
+         }
+      }
+
+      if(rc == ZtaStatusOk) break; // 最后一层完成
+   }
+}
+#else
+   graph.RunUntilCompletion();
+#endif
+
+   FLUSH_DATA_CACHE();
+   //{
+   //result = (int8_t*)output.GetBuf();
+   ////printf("single fc result: ");
+   //printf("single model result: ");
+   ////printf("single conv result: ");
+   ////printf("mean result: ");
+   //for (int i=0; i<output_buf_cnt; i++)
+   ////for (int i=0; i<10; i++)
+   //{
+   //   printf("%d ", result[i]);
+   //}
+   //printf("\n");
+   //}
+   printf("\n========== TEST_MODEL_PASS_END ==========\n");
+   fflush(stdout);
+
+   TF2.Unload();
+   return 0;
+}
+
+int test_mobilenet_v2(){
+   static bool initialized = false;
+   static TENSOR input;
+   static TENSOR output;
+   static Graph graph;
+   //bool initialized = false;
+   //TENSOR input;
+   //TENSOR output;
+   //Graph graph;
+
+   ZtaStatus rc;
+   static TfliteNn TF2;
+   int8_t *input_buf;
+   int input_buf_cnt = 0;
+   uint32_t t_bitmap_start, t_bitmap_end;
+   uint32_t t_parse_start, t_parse_end;
+   uint32_t t_infer_start, t_infer_end;
+
+   std::vector<int> input_dim={3,224,224};
+   //rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   t_bitmap_start = Time2Get();
+   //rc=input.CreateWithBitmap("classifier_input.bmp", TensorFormatSplit, TensorDataTypeInt8);
+   //rc=input.CreateWithBitmap("classifier_input.bmp", TensorFormatSplit, TensorDataTypeUint8); //uint quant
+   //rc=input.CreateWithBitmap("ILSVRC2012_val_00000001.bmp", TensorFormatSplit, TensorDataTypeUint8);
+   input_buf_cnt=input_dim[0]*input_dim[1]*input_dim[2];
+   if (!initialized) {
+      // Create once: TF2 keeps a reference to this tensor, so the buffer
+      // address must stay stable across batch iterations
+      rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeUnknown,input_dim);
+      assert(rc==ZtaStatusOk);
+   }
+   // Input is raw int8 CHW, fully preprocessed on the host
+   // (256 resize / 224 center crop / BGR / mean subtract / quantize)
+   input_buf=(int8_t *)input.GetBuf();
+   memset(input_buf,0,input_buf_cnt);
+   FILE* fp = fopen("ILSVRC2012_val_00000001_raw.bin", "rb");
+   assert(fp);
+   fread(input_buf, 1, input_buf_cnt, fp);
+   fclose(fp);
+
+   t_bitmap_end = Time2Get();
+   //rc=input.CreateWithBitmap("ILSVRC2012_val_00000001.bmp", TensorFormatSplit, TensorDataTypeInt8);
+   assert(rc==ZtaStatusOk);
+
+   //input_buf=(int8_t *)input.GetBuf();
+   //memset(input_buf,0,3*224*224);
+   //for(int i = 0; i < 3; i++)
+   //{
+   //  for(int j = 0; j < 224; j++)
+   //  {
+   //    for(int k = 0; k < 224; k++)
+   //        input_buf[k+j*224+i*224*224]=(k+i+j)%128;
+   //  }
+   //}
+
+   t_parse_start = Time2Get();
+   if (!initialized)
+   {
+      //TF2.Create("mobilenet_v2_int8_bs1.tflite",&input,1,&output);
+      TF2.Create("mobilenet_v1_int8_bs1.tflite",&input,1,&output);
+      //TF2.Create("mobilenet_v2_1_0_224_quant.tflite",&input,1,&output);
+      graph.Add(&TF2);
+      graph.Verify();
+      initialized = true;
+   }
+   t_parse_end = Time2Get();
+
+   FLUSH_DATA_CACHE();
+   t_infer_start = Time2Get();
+   graph.Prepare();
+
+#ifdef STEP_MODE_ON
+
+   //step mode
+// ---- 替换 graph.RunUntilCompletion() ----
+{
+   const char *opNames[] = {
+      "Conv2D","DepthWise","Concat","Logistic",
+      "Reshape","Pad","Detect","Add","AvgPool","MaxPool","FC","Mean","Unknown"
+   };
+
+   int totalLayers = (int)TF2.m_operators.size();
+   printf("Total layers: %d\n", totalLayers);
+
+   for(int step = 0; step < totalLayers; step++) {
+
+     // 1. 提交当前层到硬件（stepMode=0 = 只跑一层就返回）
+      ZtaStatus rc = TF2.Execute(0, 0);
+
+      // 2. 等待硬件完成（轮询响应队列）
+      while(!TF2.AllRequestAreCompleted(0)) {
+         GraphNode::CheckResponse();
+      }
+
+      // 3. 刷 cache，让 CPU 看到硬件写回的结果
+      FLUSH_DATA_CACHE();
+
+      // 4. 打印该层输出的 min/max
+      NeuralNetLayer *layer = TF2.m_operators[step];
+      int opCode = layer->m_def.op;
+      const char *opName = (opCode >= 0 && opCode < 12) ? opNames[opCode] : "Unknown";
+
+      if(!layer->m_def.output.empty()) {
+
+         //int outBufId = layer->m_def.output[0];
+         //size_t count = 1;
+         //int H=1, W=1, C=1;
+         //if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+         //   for(int d : *layer->m_def.output_shape[0]) count *= (size_t)d;
+         //   const auto &sh = *layer->m_def.output_shape[0];
+         //   int nd = (int)sh.size();
+         //   if      (nd >= 4) { H=sh[1]; W=sh[2]; C=sh[3]; }
+         //   else if (nd == 3) { H=sh[1]; W=sh[2]; C=1;     }
+         //}
+
+         // Passthrough layers (Reshape, Pad) never write their output buffer.
+         // Read from the input buffer instead so we see the real data.
+         bool isPassthrough = (layer->GetIoType() == LayerIoPassthrough);
+         int outBufId;
+         size_t count = 1;
+         int H=1, W=1, C=1;
+         if(isPassthrough && !layer->m_def.input.empty()) {
+            outBufId = layer->m_def.input[0];
+            if(!layer->m_def.input_shape.empty() && layer->m_def.input_shape[0]) {
+               for(int d : *layer->m_def.input_shape[0]) count *= (size_t)d;
+               const auto &sh = *layer->m_def.input_shape[0];
+               int nd = (int)sh.size();
+               if      (nd >= 4) { H=sh[1]; W=sh[2]; C=sh[3]; }
+               else if (nd == 3) { H=sh[1]; W=sh[2]; C=1;     }
+            }
+         } else {
+            outBufId = layer->m_def.output[0];
+            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+               for(int d : *layer->m_def.output_shape[0]) count *= (size_t)d;
+               const auto &sh = *layer->m_def.output_shape[0];
+               int nd = (int)sh.size();
+               if      (nd >= 4) { H=sh[1]; W=sh[2]; C=sh[3]; }
+               else if (nd == 3) { H=sh[1]; W=sh[2]; C=1;     }
+            }
+         }
+
+         int minVal = 127, maxVal = -128;
+         const int PRINT_N = 10;
+
+         if(TF2.BufferFlatPresent(outBufId)) {
+            int8_t *buf = (int8_t *)TF2.BufferGetFlat(outBufId);
+
+            // 求 min / max
+            for(size_t i = 0; i < count; i++) {
+               int v = (int)buf[i];
+               if(v < minVal) minVal = v;
+               if(v > maxVal) maxVal = v;
+            }
+
+            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d",
+                   step, opName, outBufId, count, minVal, maxVal);
+            printf(" shape=[");
+            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+               bool firstDim = true;
+               for(int d : *layer->m_def.output_shape[0]) {
+                  printf("%s%d", firstDim ? "" : ",", d);
+                  firstDim = false;
+               }
+            }
+            printf("]\n");
+
+
             //printf first10
-            printf("[Layer %3d] %-9s first10:[ ",step, opName);
+            printf("[Layer %3d] %-9s data:[ ",step, opName);
             int n = (H*W < PRINT_N) ? H*W : PRINT_N;
+            int off = H*W - n;
             const int8_t *ch_last = buf + (C - 1) * H * W;
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < count; i++)
               printf("%d ", (int)buf[i]);  // ch0 [0..n-1] first channel
+              //printf("%d ", (int)buf[off+i]);  // ch0 [H*W-n..H*W-1] first channel
               //printf("%d ", (int)ch_last[i]);  // ch0 [0..n-1] last channel
 
             printf("]\n");
@@ -1677,21 +1714,31 @@ int test_mobilenet_v2(){
          } else if(TF2.BufferInterleavePresent(outBufId)) {
             int8_t *buf = (int8_t *)TF2.BufferGetInterleave(outBufId);
 
-            // interleaved 格式有 channel 对齐 padding，实际分配比 count 大
-            // 但 min/max 与顺序无关，扫 count 个有效元素即可
             for(size_t i = 0; i < count; i++) {
                 int v = (int)buf[i];
                 if(v < minVal) minVal = v;
                 if(v > maxVal) maxVal = v;
             }
-            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d [interleaved]\n",
+            printf("[Layer %3d] %-9s out_buf=%-3d count=%-7zu min=%4d max=%4d [interleaved]",
                    step, opName, outBufId, count, minVal, maxVal);
 
+            printf(" shape=[");
+            if(!layer->m_def.output_shape.empty() && layer->m_def.output_shape[0]) {
+               bool firstDim = true;
+               for(int d : *layer->m_def.output_shape[0]) {
+                  printf("%s%d", firstDim ? "" : ",", d);
+                  firstDim = false;
+               }
+            }
+            printf("]\n");
+
             //printf first10
-            printf("[Layer %3d] %-9s first10:[ ",step, opName);
+            printf("[Layer %3d] %-9s data:[ ",step, opName);
             int n = (H*W < PRINT_N) ? H*W : PRINT_N;
-            for (int i = 0; i < n; i++)
-              printf("%d ", (int)buf[i*C]);  // ch0 [0..n-1] first channel
+            int off = H*W - n;
+            for (int i = 0; i < count; i++)
+              printf("%d ", (int)buf[i]);  // ch0 [0..n-1] first channel
+              //printf("%d ", (int)buf[(off+i)*C]);  // ch0 [H*W-n..H*W-1] first channel
               //printf("%d ", (int)buf[i * C + (C - 1)]); //last channel
             printf("]\n");
          } else {
@@ -1705,40 +1752,213 @@ int test_mobilenet_v2(){
 }
 // ---- 结束替换 ----
 
+#else
+   graph.RunUntilCompletion();
+#endif
 
+   // step mode should use TimeGet()
+   t_infer_end = Time2Get();
 
    FLUSH_DATA_CACHE();
+   printf("\n=== Timing Results (s) ===\n");
+   //125MHz
+   //printf("CreateWithBitmap : %f s\n", (float)(t_bitmap_end - t_bitmap_start)/125000000);
+   //printf("Model Parse      : %f s\n", (float)(t_parse_end - t_parse_start)/125000000);
+   //printf("Inference        : %f s\n", (float)(t_infer_end - t_infer_start)/125000000);
+   //printf("Total            : %f s\n", (float)(t_infer_end - t_bitmap_start)/125000000);
+
+   //100MHz
+   //printf("CreateWithBitmap : %f s\n", (float)(t_bitmap_end - t_bitmap_start)/100000000);
+   //printf("Model Parse      : %f s\n", (float)(t_parse_end - t_parse_start)/100000000);
+   //printf("Inference        : %f s\n", (float)(t_infer_end - t_infer_start)/100000000);
+   //printf("Total            : %f s\n", (float)(t_infer_end - t_bitmap_start)/100000000);
+
+   // 83.3MHz
+   printf("CreateWithBitmap : %f s\n", (float)(t_bitmap_end - t_bitmap_start)/83333333);
+   printf("Model Parse      : %f s\n", (float)(t_parse_end - t_parse_start)/83333333);
+   printf("Inference        : %f s\n", (float)(t_infer_end - t_infer_start)/83333333);
+   printf("Total            : %f s\n", (float)(t_infer_end - t_bitmap_start)/83333333);
+
+   printf("===========================\n");
+
+   //int8 model
    {
-   //size_t size=output.GetBufLen();
-   //uint8_t *p=(uint8_t *)malloc(size);
-   //FILE *fp=fopen("classifier.bin","rb");
-   //assert(fp);
-   //if(fread(p,1,size,fp) != size) {
-   //   assert(0);
+      // ---- print top-5 classification result for batch testing ----
+      int8_t *prob = (int8_t *)output.GetBuf();
+      int top5_ids[5];
+      NeuralNet::GetTop5_INT(prob, output.GetBufLen(), top5_ids);
+      printf("RESULT top1=%d top2=%d top3=%d top4=%d top5=%d\n",
+             top5_ids[0], top5_ids[1], top5_ids[2], top5_ids[3], top5_ids[4]);
+
+   }
+
+   //uint8 model
+   //{
+   //   // ---- print top-5 classification result for batch testing ----
+   //   uint8_t *prob = (uint8_t *)output.GetBuf();
+   //   int top5_ids[5];
+   //   NeuralNet::GetTop5(prob, output.GetBufLen(), top5_ids);
+   //   printf("RESULT top1=%d top2=%d top3=%d top4=%d top5=%d\n",
+   //          top5_ids[0], top5_ids[1], top5_ids[2], top5_ids[3], top5_ids[4]);
+
    //}
-   //if(memcmp(p,output.GetBuf(),size) != 0) {
-   //   assert(0);
-   //}
-   int top5[5];
-   int8_t *probability=(int8_t *)output.GetBuf();
-   NeuralNet::GetTop5_INT(probability,output.GetBufLen(),top5);
-   for(int i=0;i < 5;i++)
+
+   // ---- end marker: tells the receiver this pass is done ----
+   printf("\n========== TEST_MODEL_PASS_END ==========\n");
+   fflush(stdout);
+
+   //TF2.Unload();
+   return 0;
+}
+
+int test_lenet(){
+   static bool initialized = false;
+   static TENSOR input;
+   static TENSOR output;
+   static Graph graph;
+   ZtaStatus rc;
+   static TfliteNn TF2;
+   uint32_t t_load_start, t_load_end;
+   uint32_t t_parse_start, t_parse_end;
+   uint32_t t_infer_start, t_infer_end;
+
+   int input_buf_cnt;
+   int8_t *input_buf;
+
+   t_load_start = Time2Get();
    {
-      printf("label: %d probability: %d\n",top5[i], probability[top5[i]]);
+      std::vector<int> input_dim = {1, 28, 28};
+      input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeUnknown,input_dim); // input_ch > 3
+      input_buf_cnt=input_dim[0]*input_dim[1]*input_dim[2];
+      input_buf=(int8_t *)input.GetBuf();
+      memset(input_buf,0,input_buf_cnt);
+      FILE* fp = fopen("mnist_test_label_0.bin", "rb");
+      assert(fp);
+      fread(input_buf, 1, input_buf_cnt, fp);
+      fclose(fp);
    }
-   //fclose(fp);
-   //free(p);
+   t_load_end = Time2Get();
+
+   t_parse_start = Time2Get();
+   if (!initialized) {
+      TF2.Create("lenet_mnist_int8.tflite",&input,1,&output);
+      graph.Add(&TF2);
+      graph.Verify();
+      initialized = true;
    }
-   TF2.Unload();
+   t_parse_end = Time2Get();
+
+   FLUSH_DATA_CACHE();
+   t_infer_start = Time2Get();
+   graph.Prepare();
+   graph.RunUntilCompletion();
+   t_infer_end = Time2Get();
+   FLUSH_DATA_CACHE();
+
+   printf("\n=== Timing Results (s) ===\n");
+   printf("Load Input       : %f s\n", (float)(t_load_end - t_load_start)/83333333);
+   printf("Model Parse      : %f s\n", (float)(t_parse_end - t_parse_start)/83333333);
+   printf("Inference        : %f s\n", (float)(t_infer_end - t_infer_start)/83333333);
+   printf("Total            : %f s\n", (float)(t_infer_end - t_load_start)/83333333);
+   printf("===========================\n");
+
+   {
+      int8_t *prob = (int8_t *)output.GetBuf();
+      int top5_ids[5];
+      NeuralNet::GetTop5_INT(prob, output.GetBufLen(), top5_ids);
+      printf("RESULT top1=%d top2=%d top3=%d top4=%d top5=%d\n",
+             top5_ids[0], top5_ids[1], top5_ids[2], top5_ids[3], top5_ids[4]);
+   }
+   printf("\n========== TEST_MODEL_PASS_END ==========\n");
+   fflush(stdout);
+
+   return 0;
+}
+
+int test_resnet18(){
+   static bool initialized = false;
+   static TENSOR input;
+   static TENSOR output;
+   static Graph graph;
+   ZtaStatus rc;
+   static TfliteNn TF2;
+   uint32_t t_load_start, t_load_end;
+   uint32_t t_parse_start, t_parse_end;
+   uint32_t t_infer_start, t_infer_end;
+
+   int input_buf_cnt;
+   int8_t *input_buf;
+
+   // Batch script swaps the array behind ILSVRC2012_val_00000001_raw.bin via
+   // JTAG while CPU is halted at test(); invalidate cache so fread sees it
+   FLUSH_DATA_CACHE();
+
+   t_load_start = Time2Get();
+   {
+      std::vector<int> input_dim = {3, 224, 224};
+      input_buf_cnt=input_dim[0]*input_dim[1]*input_dim[2];
+      if (!initialized) {
+         // Create once: TF2 keeps a reference to this tensor, so the buffer
+         // address must stay stable across batch iterations
+         rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeUnknown,input_dim);
+         assert(rc==ZtaStatusOk);
+      }
+      // Input is raw int8 CHW, fully preprocessed on the host
+      // (256 resize / 224 center crop / BGR / mean subtract / quantize)
+      input_buf=(int8_t *)input.GetBuf();
+      memset(input_buf,0,input_buf_cnt);
+      FILE* fp = fopen("ILSVRC2012_val_00000001_raw.bin", "rb");
+      assert(fp);
+      fread(input_buf, 1, input_buf_cnt, fp);
+      fclose(fp);
+   }
+   t_load_end = Time2Get();
+
+   t_parse_start = Time2Get();
+   if (!initialized) {
+      TF2.Create("resnet18_full_integer_quant.tflite",&input,1,&output);
+      graph.Add(&TF2);
+      graph.Verify();
+      initialized = true;
+   }
+   t_parse_end = Time2Get();
+
+   FLUSH_DATA_CACHE();
+   t_infer_start = Time2Get();
+   graph.Prepare();
+   graph.RunUntilCompletion();
+   t_infer_end = Time2Get();
+   FLUSH_DATA_CACHE();
+
+   printf("\n=== Timing Results (s) ===\n");
+   // 83.3MHz
+   printf("Load Input       : %f s\n", (float)(t_load_end - t_load_start)/83333333);
+   printf("Model Parse      : %f s\n", (float)(t_parse_end - t_parse_start)/83333333);
+   printf("Inference        : %f s\n", (float)(t_infer_end - t_infer_start)/83333333);
+   printf("Total            : %f s\n", (float)(t_infer_end - t_load_start)/83333333);
+   printf("===========================\n");
+
+   {
+      // ---- print top-5 classification result for batch testing ----
+      int8_t *prob = (int8_t *)output.GetBuf();
+      int top5_ids[5];
+      NeuralNet::GetTop5_INT(prob, output.GetBufLen(), top5_ids);
+      printf("RESULT top1=%d top2=%d top3=%d top4=%d top5=%d\n",
+             top5_ids[0], top5_ids[1], top5_ids[2], top5_ids[3], top5_ids[4]);
+   }
+   // ---- end marker: tells the receiver this pass is done ----
+   printf("\n========== TEST_MODEL_PASS_END ==========\n");
+   fflush(stdout);
+
    return 0;
 }
 
 
 int test()
 {
-   printf("start\n");
+   printf("test start\n");
 //   test_mobinet_ssd();
-   test_mobinet();
+//   test_mobinet();
 //   test_histogram();
 //   test_gaussian();
 //   test_resize();
@@ -1749,6 +1969,8 @@ int test()
 //   test_color();
 //   test_model();
 //   test_mobilenet_v2();
+//   test_lenet();
+   test_resnet18();
    return 0;
 }
 

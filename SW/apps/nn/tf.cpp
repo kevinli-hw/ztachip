@@ -146,6 +146,7 @@ ZtaStatus TfliteNn::Verify() {
       for (uint32_t i = 0; i < (uint32_t)operators->size(); ++i) {
          const auto* op = operators->Get(i);
          NeuralNetOperatorDef def;
+         memset(&def.u, 0, sizeof(def.u)); //clear unused data
          def.op=oplst[op->opcode_index()];
          def.index=i;
          switch(def.op) {
@@ -175,17 +176,35 @@ ZtaStatus TfliteNn::Verify() {
                   padding=conv_params->padding();
                   fused_activation_function=conv_params->fused_activation_function();
                }
+
                // Padding layer will do nothing, but the conv/dw_conv layer after padding should change the input tensor/shape
                int input_index = op->inputs()->Get(0);
-               if (i > 0) //no need to deal with the first layer
+               // if (i > 0) //no need to deal with the first layer
+               // {
+               //    const auto* prev_op = operators->Get(i-1);
+               //    NeuralNetOperatorDef prev_def;
+               //    prev_def.op=oplst[prev_op->opcode_index()];
+               //    if (prev_def.op == NeuralNetOperatorPad){
+               //      //printf("explicit padding\n");
+               //      input_index = prev_op->inputs()->Get(0);
+               //      padding=tflite::Padding_SAME; //Padding
+               //    }
+               // }
+               bool has_explicit_pad = false;
+               int explicit_pad_h = 0, explicit_pad_w = 0;
+               if (i > 0)
                {
                   const auto* prev_op = operators->Get(i-1);
                   NeuralNetOperatorDef prev_def;
                   prev_def.op=oplst[prev_op->opcode_index()];
                   if (prev_def.op == NeuralNetOperatorPad){
-                    printf("explicit padding\n");
                     input_index = prev_op->inputs()->Get(0);
-                    padding=tflite::Padding_SAME; //Padding
+                    int pad_tensor_idx = prev_op->inputs()->Get(1);
+                    int32_t *pad_data = (int32_t *)m_buffers[m_tensors[pad_tensor_idx].m_buffer].buf;
+                    explicit_pad_h = pad_data[2];
+                    explicit_pad_w = pad_data[4];
+                    has_explicit_pad = true;
+                    padding = tflite::Padding_VALID;
                   }
                }
 
@@ -212,6 +231,10 @@ ZtaStatus TfliteNn::Verify() {
                                     padding,
                                     &out_height,
                                     &out_width);
+               if (has_explicit_pad) {
+                  pad.h = explicit_pad_h;
+                  pad.w = explicit_pad_w;
+               }
 #ifdef PRINTF_LOG_ON
                if (padding == tflite::Padding_SAME)
                  printf("Padding_SAME\n");
@@ -269,7 +292,8 @@ ZtaStatus TfliteNn::Verify() {
                def.output_type.push_back(output.type);
                def.u.conv.filter_shape=&filter.m_shape;
                def.u.conv.bias_shape=&bias.m_shape;
-               def.input.push_back(op->inputs()->Get(0));
+               //def.input.push_back(op->inputs()->Get(0));
+               def.input.push_back(input_index);
                def.output.push_back(op->outputs()->Get(0));
                break;
                }
@@ -322,16 +346,21 @@ ZtaStatus TfliteNn::Verify() {
                      &def.u.conv.output_shift,
                      &def.u.conv.output_activation_min,
                      &def.u.conv.output_activation_max,
-                     0,0,0,0,0); //per-tensor quantization
+                     &def.output_multiplier_per_channel,
+                     &def.output_shift_per_channel,
+                     &def.output_scale_per_channel,
+                     &def.u.conv.per_tensor,
+                     &def.u.conv.per_channel
+                     );
                //def.u.conv.output_shift = -def.u.conv.output_shift;
                def.u.conv.input_offset = input.quantization.m_zeroPoint[0];
                def.u.conv.weights_offset = weights.quantization.m_zeroPoint[0];
                def.u.conv.output_offset = output.quantization.m_zeroPoint[0];
 #ifdef PRINTF_LOG_ON
-               //if (def.u.conv.per_tensor)
-               //   printf("per tensor quantization\n");
-               //else
-               //   printf("per channel quantization\n");
+               if (def.u.conv.per_tensor)
+                  printf("per tensor quantization\n");
+               else
+                  printf("per channel quantization\n");
                printf("multiplier: %ld, shift: %ld\n", def.u.conv.output_multiplier, def.u.conv.output_shift);
                printf("offset input: %ld, weights: %ld, output: %ld\n", def.u.conv.input_offset, def.u.conv.weights_offset, def.u.conv.output_offset);
 #endif
@@ -346,6 +375,28 @@ ZtaStatus TfliteNn::Verify() {
                def.u.conv.bias_shape=&bias.m_shape;
                def.input.push_back(op->inputs()->Get(0));
                def.output.push_back(op->outputs()->Get(0));
+
+               // Check if FC input comes from a Reshape with spatial dims > 1x1
+               {
+                  int fc_in = op->inputs()->Get(0);
+                  for(int r=0;r < (int)NeuralNet::m_operators.size();r++) {
+                     if(NeuralNet::m_operators[r]->m_def.op==NeuralNetOperatorReshape &&
+                        !NeuralNet::m_operators[r]->m_def.output.empty() &&
+                        NeuralNet::m_operators[r]->m_def.output[0]==fc_in &&
+                        !NeuralNet::m_operators[r]->m_def.input_shape.empty() &&
+                        NeuralNet::m_operators[r]->m_def.input_shape[0]) {
+                        const auto &rsh=*NeuralNet::m_operators[r]->m_def.input_shape[0];
+                        int rnd=(int)rsh.size();
+                        if(rnd>=4 && rsh[1]*rsh[2]>1) {
+                           def.u.conv.fc_spatial_H=rsh[1];
+                           def.u.conv.fc_spatial_W=rsh[2];
+                           def.u.conv.fc_spatial_C=rsh[3];
+                           //printf("FC weight permute: H=%d W=%d C=%d\n",rsh[1],rsh[2],rsh[3]);
+                        }
+                        break;
+                     }
+                  }
+               }
                break;
             }
             case NeuralNetOperatorConcatenation: {
@@ -437,7 +488,6 @@ ZtaStatus TfliteNn::Verify() {
                break;
                }
             case NeuralNetOperatorPad: {
-               // output same as input
                TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
                def.input.push_back(op->inputs()->Get(0));
                def.output.push_back(op->outputs()->Get(0));
@@ -445,12 +495,8 @@ ZtaStatus TfliteNn::Verify() {
                def.input_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
                def.input_type.push_back(m_tensors[op->inputs()->Get(0)].type);
 
-               //def.output_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
-               //def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
-               //Pad output=input
                def.output_shape.push_back(&m_tensors[op->inputs()->Get(0)].m_shape);
-               def.output_type.push_back(m_tensors[op->inputs()->Get(0)].type);
-
+               def.output_type.push_back(m_tensors[op->outputs()->Get(0)].type);
                break;
                }
             case NeuralNetOperatorAdd: {
@@ -519,6 +565,7 @@ ZtaStatus TfliteNn::Verify() {
                def.input_type.push_back(input.type);
                def.output_shape.push_back(&output.m_shape);
                def.output_type.push_back(output.type);
+               def.u.pool_avg.keep_dims = false;
                def.u.pool_avg.stride_w=pool_params->stride_w();
                def.u.pool_avg.stride_h=pool_params->stride_h();
                def.u.pool_avg.filter_w=pool_params->filter_width();
@@ -543,7 +590,74 @@ ZtaStatus TfliteNn::Verify() {
                }
                break;
                }
+            case NeuralNetOperatorMaxPool2D: {
+               int out_height,out_width;
+               const tflite::Pool2DOptions *pool_params=op->builtin_options_as_Pool2DOptions();
+
+               int input_index = op->inputs()->Get(0);
+               bool has_explicit_pad = false;
+               int explicit_pad_h = 0, explicit_pad_w = 0;
+               if (i > 0)
+               {
+                  const auto* prev_op = operators->Get(i-1);
+                  NeuralNetOperatorDef prev_def;
+                  prev_def.op=oplst[prev_op->opcode_index()];
+                  if (prev_def.op == NeuralNetOperatorPad){
+                    input_index = prev_op->inputs()->Get(0);
+                    int pad_tensor_idx = prev_op->inputs()->Get(1);
+                    int32_t *pad_data = (int32_t *)m_buffers[m_tensors[pad_tensor_idx].m_buffer].buf;
+                    explicit_pad_h = pad_data[2];
+                    explicit_pad_w = pad_data[4];
+                    has_explicit_pad = true;
+                  }
+               }
+
+               //TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
+               TfliteNnTensorDef &input=m_tensors[input_index];
+               TfliteNnTensorDef &output=m_tensors[op->outputs()->Get(0)];
+               assert(op->inputs()->size()==1);
+               assert(op->outputs()->size()==1);
+               assert(pool_params);
+               //def.input.push_back(op->inputs()->Get(0));
+               def.input.push_back(input_index);
+               def.output.push_back(op->outputs()->Get(0));
+               def.input_shape.push_back(&input.m_shape);
+               def.input_type.push_back(input.type);
+               def.output_shape.push_back(&output.m_shape);
+               def.output_type.push_back(output.type);
+               def.u.pool_avg.keep_dims = false;
+               def.u.pool_avg.stride_w=pool_params->stride_w();
+               def.u.pool_avg.stride_h=pool_params->stride_h();
+               def.u.pool_avg.filter_w=pool_params->filter_width();
+               def.u.pool_avg.filter_h=pool_params->filter_height();
+               TfliteNnPadding pad = ComputePaddingHeightWidth(
+                        def.u.pool_avg.stride_h,def.u.pool_avg.stride_w,
+                        1,1, input.m_shape[1],input.m_shape[2],def.u.pool_avg.filter_h,
+                        def.u.pool_avg.filter_w,pool_params->padding(), &out_height, &out_width);
+
+               if (has_explicit_pad) {
+                  pad.h = explicit_pad_h;
+                  pad.w = explicit_pad_w;
+               }
+
+               def.u.pool_avg.pad_w=pad.w;
+               def.u.pool_avg.pad_h=pad.h;
+               tflite::ActivationFunctionType activation=pool_params->fused_activation_function();
+               if (output.type == NeuralNetTensorType_UINT8) {
+                  CalculateActivationRangeUint8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
+               } else {
+                  CalculateActivationRangeInt8(ParseActivation(activation),
+                                             &output,
+                                             &def.u.pool_avg.activation_min,
+                                             &def.u.pool_avg.activation_max);
+               }
+               break;
+            }
             case NeuralNetOperatorMean: {
+               const tflite::ReducerOptions *reducer_params = op->builtin_options_as_ReducerOptions();
                int out_height,out_width;
                TfliteNnTensorDef &input=m_tensors[op->inputs()->Get(0)];
                TfliteNnTensorDef &output=m_tensors[op->outputs()->Get(0)];
@@ -556,6 +670,7 @@ ZtaStatus TfliteNn::Verify() {
                def.input_type.push_back(input.type);
                def.output_shape.push_back(&output.m_shape);
                def.output_type.push_back(output.type);
+               def.u.pool_avg.keep_dims = reducer_params->keep_dims();
                def.u.pool_avg.stride_w=1;
                def.u.pool_avg.stride_h=1;
                def.u.pool_avg.filter_w=input.m_shape[1];

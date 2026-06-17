@@ -141,11 +141,62 @@ write_c_array("single_conv_3x3", raw_data)
 raw_data = read_file("single_conv_1x1.tflite")
 write_c_array("single_conv_1x1", raw_data)
 
+raw_data = read_file("single_conv_1x1_8x8.tflite")
+write_c_array("single_conv_1x1_8x8", raw_data)
+
 raw_data = read_file("add_test_model_int8.tflite")
 write_c_array("add_test_model_int8", raw_data)
 
 raw_data = read_file("conv_pad_dw_int8.tflite")
 write_c_array("conv_pad_dw_int8", raw_data)
+
+raw_data = read_file("conv_dw_conv_int8.tflite")
+write_c_array("conv_dw_conv_int8", raw_data)
+
+raw_data = read_file("single_conv_56x56.tflite")
+write_c_array("single_conv_56x56", raw_data)
+
+raw_data = read_file("single_conv_1x1x96.tflite")
+write_c_array("single_conv_1x1x96", raw_data)
+
+raw_data = read_file("single_op003_conv2d.tflite")
+write_c_array("single_op003_conv2d", raw_data)
+
+raw_data = read_file("single_conv_56x56x64.tflite")
+write_c_array("single_conv_56x56x64", raw_data)
+
+raw_data = read_file("single_maxpool3x3s2.tflite")
+write_c_array("single_maxpool3x3s2", raw_data)
+
+raw_data = read_file("single_maxpool_int8.tflite")
+write_c_array("single_maxpool_int8", raw_data)
+
+raw_data = read_file("lenet_mnist_int8.tflite")
+write_c_array("lenet_mnist_int8", raw_data)
+
+raw_data = read_file("resnet50_int8_bs1.tflite")
+write_c_array("resnet50_int8_bs1", raw_data)
+
+raw_data = read_file("resnet18_full_integer_quant.tflite")
+write_c_array("resnet18_full_integer_quant", raw_data)
+
+raw_data = read_file("mnist_test_label_0.bin")
+write_c_array("mnist_test_label_0", raw_data)
+
+raw_data = read_file("op003_conv2d_input.bin")
+write_c_array("op003_conv2d_input", raw_data)
+
+raw_data = read_file("op003_conv2d_input_fpga.bin")
+write_c_array("op003_conv2d_input_fpga", raw_data)
+
+raw_data = read_file("ILSVRC2012_val_00000001.bmp")
+write_c_array("ILSVRC2012_val_00000001", raw_data)
+
+raw_data = read_file("ILSVRC2012_val_00000001_raw.bin")
+write_c_array("ILSVRC2012_val_00000001_raw", raw_data)
+
+raw_data = read_file("conv_pad_dw_int8_ch8.tflite")
+write_c_array("conv_pad_dw_int8_ch8", raw_data)
 
 raw_data = read_file("one_conv.tflite")
 write_c_array("one_conv", raw_data)
@@ -167,6 +218,9 @@ write_c_array("mobilenet_v2_int8", raw_data)
 
 raw_data = read_file("mobilenet_v2_int8_bs1.tflite")
 write_c_array("mobilenet_v2_int8_bs1", raw_data)
+
+raw_data = read_file("mobilenet_v1_int8_bs1.tflite")
+write_c_array("mobilenet_v1_int8_bs1", raw_data)
 
 raw_data = read_file("classifier.bin")
 write_c_array("classifier", raw_data)

@@ -68,7 +68,8 @@ ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
           (*op->input_shape[0])[2],
 	      (unsigned int)m_shmSpu,
           op->u.pool_avg.input_offset,
-          m_outputShift);
+          m_outputShift,
+         0);
    }else if (op->op == NeuralNetOperatorMean)
    {
        kernel_Pooling_exe(
@@ -79,13 +80,14 @@ ZtaStatus NeuralNetLayerPoolAvg::Evaluate(int queue) {
 	      (unsigned int)(interleave?m_nn->BufferGetInterleave(op->output[0]):m_nn->BufferGetFlat(op->output[0])),
           op->u.pool_avg.filter_w,
           op->u.pool_avg.stride_w,
-          (*op->output_shape[0])[1],
+          op->u.pool_avg.keep_dims ? (*op->output_shape[0])[3]:(*op->output_shape[0])[1],
           1,
           (*op->input_shape[0])[3],
           (*op->input_shape[0])[2],
 	      (unsigned int)m_shmSpu,
           op->u.pool_avg.input_offset,
-          m_outputShift);
+          m_outputShift,
+         0);
    }else{
        assert(0);
    }
@@ -135,7 +137,12 @@ int16_t NeuralNetLayerPoolAvg::SpuMean(int16_t _in,void *pparm,uint32_t parm,uin
       offset = op->u.pool_avg.output_offset;
    }
    float _in2;
-   _in2=static_cast<float>((((float)(_in)*(float)N)/(float)D)+0.5)+offset;
+   //_in2=static_cast<float>((((float)(_in)*(float)N)/(float)D)+0.5)+offset;
+   if(_in > 0)
+     _in2 = ((float)_in*(float)N+(float)D/2)/(float)D+offset;
+   else
+     _in2 = ((float)_in*(float)N-(float)D/2)/(float)D+offset;
+
    if(_in2 > activation_max) {
       return static_cast<int16_t>(activation_max);
    } else if(_in2 < activation_min) {

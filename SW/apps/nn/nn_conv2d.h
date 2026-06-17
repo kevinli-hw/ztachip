@@ -50,7 +50,9 @@ private:
                                  int *conv_dx,int *conv_dycnt,int *conv_groupsz,
                                  int max_conv_dx,int max_conv_dy,int max_dycnt);
    ZTA_SHARED_MEM GenConvolutionWeight(uint8_t *_coef,std::vector<int> &shape,int topcnt,int botcnt,int kz);
-   ZTA_SHARED_MEM GenFcWeight(uint8_t *_coef,int _topcnt,int _botcnt,int *coef_dim,int *_nthread,int *_npcore);
+   //ZTA_SHARED_MEM GenFcWeight(uint8_t *_coef,int _topcnt,int _botcnt,int *coef_dim,int *_nthread,int *_npcore);
+   ZTA_SHARED_MEM GenFcWeight(uint8_t *_coef,int _topcnt,int _botcnt,int *coef_dim,int *_nthread,int *_npcore,
+                              int spatialH=0,int spatialW=0,int spatialC=0);
    //void GenBias(int32_t *bias,int biasLen,int32_t activationBias,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo);
    void GenBias(int32_t *bias,int biasLen,std::vector<int32_t> bias_shift,ZTA_SHARED_MEM *shmHi,ZTA_SHARED_MEM *shmLo, bool per_tensor, bool per_channel);
 public:
@@ -59,6 +61,7 @@ public:
    ZTA_SHARED_MEM m_shmBiasHi;
    ZTA_SHARED_MEM m_shmBiasLo;
    ZTA_SHARED_MEM m_shmActivation_multiplier;
+   ZTA_SHARED_MEM m_shmActivation_shift;
    ZTA_SHARED_MEM m_shmSpu;
    union {
       struct {

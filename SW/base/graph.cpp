@@ -44,7 +44,8 @@ Graph::Graph() {
    m_timeElapsed=0;
    m_queue=queue;
    m_lastRequestId=0;
-   m_lastResponseId=0xffffffff;
+   //m_lastResponseId=0xffffffff;
+   m_lastResponseId=0;
 }
 
 Graph::~Graph() {

@@ -45,8 +45,11 @@ ZtaStatus NeuralNetLayerAdd::Prepare() {
    op->u.add.output.shift=-op->u.add.output.shift;
    op->u.add.input[0].shift=-op->u.add.input[0].shift;
    op->u.add.input[1].shift=-op->u.add.input[1].shift;
-   min[0]=(int32_t)SpuInputEval((float)0,this,0,op->u.add.output.shift);
-   max[0]=(int32_t)SpuInputEval((float)255,this,0,op->u.add.output.shift);
+   bool is_int8 = (op->input_type[0] == NeuralNetTensorType_INT8);
+   min[0]=(int32_t)SpuInputEval(is_int8 ? (float)-128 : (float)0,  this,0,op->u.add.output.shift);
+   max[0]=(int32_t)SpuInputEval(is_int8 ? (float)127  : (float)255,this,0,op->u.add.output.shift);
+   //min[0]=(int32_t)SpuInputEval((float)0,this,0,op->u.add.output.shift);
+   //max[0]=(int32_t)SpuInputEval((float)255,this,0,op->u.add.output.shift);
    range=std::abs(min[0]);
    if(range<std::abs(max[0]))
       range=std::abs(max[0]);
@@ -59,8 +62,11 @@ ZtaStatus NeuralNetLayerAdd::Prepare() {
       shift=10-bits;
    else
       shift=0;
-   min[1]=(int32_t)SpuInputEval((float)0,this,1,op->u.add.output.shift);
-   max[1]=(int32_t)SpuInputEval((float)255,this,1,op->u.add.output.shift);
+
+   min[1]=(int32_t)SpuInputEval(is_int8 ? (float)-128 : (float)0,  this,0,op->u.add.output.shift);
+   max[1]=(int32_t)SpuInputEval(is_int8 ? (float)127  : (float)255,this,0,op->u.add.output.shift);
+//   min[1]=(int32_t)SpuInputEval((float)0,this,1,op->u.add.output.shift);
+//   max[1]=(int32_t)SpuInputEval((float)255,this,1,op->u.add.output.shift);
    range=std::abs(min[1]);
    if(range<std::abs(max[1]))
       range=std::abs(max[1]);

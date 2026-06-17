@@ -514,12 +514,7 @@ cTerm *cGEN::genTermAssignmentExpression(cInstructions *instructions,cAstNode *_
    {
       x1=y;
       if(isMU)
-      {
-         if(x1->isDouble() || x2->isDouble())
-            oc=cConfig::OPCODE_QUANT_MUL;
-         else
-            oc=cConfig::OPCODE_MUL;
-      }
+         oc=cConfig::OPCODE_MUL;
       else
          oc=cConfig::IOPCODE_MUL;
    }
@@ -1220,10 +1215,13 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
             oc=cConfig::IOPCODE_MUL;
          else
          {
-            if (x1->isDouble() || x2->isDouble())
+            if (x1->isDouble())
             {
               printf("QUANT_MUL\n");
               oc=cConfig::OPCODE_QUANT_MUL;
+              xacc=x1;
+              x1=x2;
+              x2=new cTerm_MU_Null();
             }
             else
               oc=cConfig::OPCODE_MUL;
@@ -1236,10 +1234,24 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
          {
             if (x1->isDouble())
             {
-               oc=cConfig::OPCODE_SHLA;
-               xacc=x1;
-               x1=x2;
-               x2=new cTerm_MU_Null();
+                //oc=cConfig::OPCODE_SHLA;
+                //xacc=x1;
+                //x1=x2;
+                //x2=new cTerm_MU_Null();
+
+                if (CAST(cTerm_MU, x2)->getVectorWidth() > 0)
+                {
+                   printf("SHIFT_LA_V\n");
+                   oc   = cConfig::OPCODE_SHLA_V;
+                   xacc = x1;
+                   x1   = x2;
+                   x2   = new cTerm_MU_Null();
+                }else{
+                   oc=cConfig::OPCODE_SHLA;
+                   xacc=x1;
+                   x1=x2;
+                   x2=new cTerm_MU_Null();
+                }
             }
             else
             {
@@ -1262,10 +1274,24 @@ cTerm *cGEN::genTermCalculation(cInstructions *instructions,cAstNode *_root,cAst
          {
             if (x1->isDouble())
             {
-               oc = cConfig::OPCODE_SHRA;
-               xacc=x1;
-               x1 = x2;
-               x2 = new cTerm_MU_Null();
+                //oc = cConfig::OPCODE_SHRA;
+                //xacc=x1;
+                //x1 = x2;
+                //x2 = new cTerm_MU_Null();
+
+                if (CAST(cTerm_MU, x2)->getVectorWidth() > 0)
+                {
+                   printf("SHIFT_RA_V\n");
+                   oc   = cConfig::OPCODE_SHRA_V;
+                   xacc = x1;
+                   x1   = x2;
+                   x2   = new cTerm_MU_Null();
+                }else{
+                   oc = cConfig::OPCODE_SHRA;
+                   xacc=x1;
+                   x1 = x2;
+                   x2 = new cTerm_MU_Null();
+                }
             }
             else
             {

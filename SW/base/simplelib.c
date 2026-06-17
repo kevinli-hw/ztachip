@@ -21,16 +21,34 @@
 //#include "../fs/gen/pad_dw_conv.c"
 //#include "../fs/gen/dw_conv.c"
 //#include "../fs/gen/conv_pad_dw_int8.c"
+//#include "../fs/gen/conv_dw_conv_int8.c"
+//#include "../fs/gen/conv_pad_dw_int8_ch8.c"
 //#include "../fs/gen/one_conv.c"
 //#include "../fs/gen/single_conv_1x1.c"
+//#include "../fs/gen/single_conv_1x1x96.c"
+//#include "../fs/gen/single_op003_conv2d.c"
+//#include "../fs/gen/op003_conv2d_input.c"
+//#include "../fs/gen/op003_conv2d_input_fpga.c"
+//#include "../fs/gen/single_conv_56x56.c"
+//#include "../fs/gen/single_conv_1x1_8x8.c"
+//#include "../fs/gen/single_conv_56x56x64.c"
 //#include "../fs/gen/single_conv_3x3.c"
 //#include "../fs/gen/single_fc_int8.c"
+//#include "../fs/gen/single_maxpool_int8.c"
+//#include "../fs/gen/single_maxpool3x3s2.c"
+//#include "../fs/gen/lenet_mnist_int8.c"
+//#include "../fs/gen/mnist_test_label_0.c"
 //#include "../fs/gen/mean_model.c"
 //#include "../fs/gen/mobilenet_v2_int8.c"
 //#include "../fs/gen/mobilenet_v2_int8_bs1.c"
-#include "../fs/gen/classifier_input.c"
-#include "../fs/gen/classifier.c"
-#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
+//#include "../fs/gen/mobilenet_v1_int8_bs1.c"
+//#include "../fs/gen/classifier_input.c"
+//#include "../fs/gen/ILSVRC2012_val_00000001.c"
+//#include "../fs/gen/resnet50_int8_bs1.c"
+#include "../fs/gen/resnet18_full_integer_quant.c"
+#include "../fs/gen/ILSVRC2012_val_00000001_raw.c"
+//#include "../fs/gen/classifier.c"
+//#include "../fs/gen/mobilenet_v2_1_0_224_quant.c"
 #include "../thirdparty/FatFs/ff.h"
 
 // This file implements functions required by newlib
@@ -127,7 +145,7 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(pad_dw_conv);
    //   files[i].body=pad_dw_conv;
    //}
-   //else if(strcmp(name,"dw_conv.tflite")==0) {
+   //if(strcmp(name,"dw_conv.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(dw_conv);
@@ -138,6 +156,18 @@ int _open(const char *name, int flags, int mode) {
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(conv_pad_dw_int8);
    //   files[i].body=conv_pad_dw_int8;
+   //}
+   //if(strcmp(name,"conv_dw_conv_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(conv_dw_conv_int8);
+   //   files[i].body=conv_dw_conv_int8;
+   //}
+   //if(strcmp(name,"conv_pad_dw_int8_ch8.tflite")==0) {
+	 //     files[i].status=true;
+	 //     files[i].curr=0;
+   //     files[i].len=sizeof(conv_pad_dw_int8_ch8);
+   //     files[i].body=conv_pad_dw_int8_ch8;
    //}
    //if(strcmp(name,"one_conv.tflite")==0) {
 	 //   files[i].status=true;
@@ -151,11 +181,52 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(single_conv_1x1);
    //   files[i].body=single_conv_1x1;
    //}
+   //if(strcmp(name,"single_conv_56x56x64.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_56x56x64);
+   //   files[i].body=single_conv_56x56x64;
+   //}
+   //if(strcmp(name,"single_conv_1x1x96.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_1x1x96);
+   //   files[i].body=single_conv_1x1x96;
+   //}
+   //if(strcmp(name,"single_op003_conv2d.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_op003_conv2d);
+   //   files[i].body=single_op003_conv2d;
+   //}else if(strcmp(name,"op003_conv2d_input_fpga.bin")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(op003_conv2d_input_fpga);
+   //   files[i].body=op003_conv2d_input_fpga;
+   //}
+   //}else if(strcmp(name,"op003_conv2d_input.bin")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(op003_conv2d_input);
+   //   files[i].body=op003_conv2d_input;
+   //}
+   //if(strcmp(name,"single_conv_1x1_8x8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_1x1_8x8);
+   //   files[i].body=single_conv_1x1_8x8;
+   //}
    //if(strcmp(name,"single_conv_3x3.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(single_conv_3x3);
    //   files[i].body=single_conv_3x3;
+   //}
+   //if(strcmp(name,"single_conv_56x56.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_conv_56x56);
+   //   files[i].body=single_conv_56x56;
    //}
    //if(strcmp(name,"single_fc_int8.tflite")==0) {
 	 //   files[i].status=true;
@@ -163,6 +234,42 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(single_fc_int8);
    //   files[i].body=single_fc_int8;
    //}
+   //if(strcmp(name,"single_maxpool_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_maxpool_int8);
+   //   files[i].body=single_maxpool_int8;
+   //}
+   //if(strcmp(name,"single_maxpool3x3s2.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(single_maxpool3x3s2);
+   //   files[i].body=single_maxpool3x3s2;
+   //}
+   //if(strcmp(name,"lenet_mnist_int8.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(lenet_mnist_int8);
+   //   files[i].body=lenet_mnist_int8;
+   //}
+   //else if(strcmp(name,"mnist_test_label_0.bin")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(mnist_test_label_0);
+   //   files[i].body=mnist_test_label_0;
+   //}
+   //if(strcmp(name,"resnet50_int8_bs1.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(resnet50_int8_bs1);
+   //   files[i].body=resnet50_int8_bs1;
+   //}
+   if(strcmp(name,"resnet18_full_integer_quant.tflite")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(resnet18_full_integer_quant);
+      files[i].body=resnet18_full_integer_quant;
+   }
    //if(strcmp(name,"mean_model.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
@@ -181,30 +288,48 @@ int _open(const char *name, int flags, int mode) {
    //   files[i].len=sizeof(mobilenet_v2_int8_bs1);
    //   files[i].body=mobilenet_v2_int8_bs1;
    //}
+   //if(strcmp(name,"mobilenet_v1_int8_bs1.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(mobilenet_v1_int8_bs1);
+   //   files[i].body=mobilenet_v1_int8_bs1;
+   //}
+   else if(strcmp(name,"ILSVRC2012_val_00000001_raw.bin")==0) {
+	    files[i].status=true;
+	    files[i].curr=0;
+      files[i].len=sizeof(ILSVRC2012_val_00000001_raw);
+      files[i].body=ILSVRC2012_val_00000001_raw;
+   }
+   //if(strcmp(name,"ILSVRC2012_val_00000001.bmp")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(ILSVRC2012_val_00000001);
+   //   files[i].body=ILSVRC2012_val_00000001;
+   //}
    //else if(strcmp(name,"mobilenet_v2_int8.tflite")==0) {
 	 //   files[i].status=true;
 	 //   files[i].curr=0;
    //   files[i].len=sizeof(mobilenet_v2_int8);
    //   files[i].body=mobilenet_v2_int8;
    //}
-   if(strcmp(name,"classifier_input.bmp")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(classifier_input);
-      files[i].body=classifier_input;
-   }
-   else if(strcmp(name,"classifier.bin")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(classifier);
-      files[i].body=classifier;
-   }
-   else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
-	    files[i].status=true;
-	    files[i].curr=0;
-      files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
-      files[i].body=mobilenet_v2_1_0_224_quant;
-   }
+   //else if(strcmp(name,"mobilenet_v2_1_0_224_quant.tflite")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(mobilenet_v2_1_0_224_quant);
+   //   files[i].body=mobilenet_v2_1_0_224_quant;
+   //}
+   //else if(strcmp(name,"classifier_input.bmp")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(classifier_input);
+   //   files[i].body=classifier_input;
+   //}
+   //else if(strcmp(name,"classifier.bin")==0) {
+	 //   files[i].status=true;
+	 //   files[i].curr=0;
+   //   files[i].len=sizeof(classifier);
+   //   files[i].body=classifier;
+   //}
    else
    {
       if(!usd_is_init) {

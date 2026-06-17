@@ -34,6 +34,7 @@
 #include "nn_poolavg.h"
 #include "nn_reshape.h"
 #include "nn_pad.h"
+#include "nn_poolmax.h"
 
 // Base class to process to process neural network
 
@@ -80,6 +81,9 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
       case NeuralNetOperatorAvgPool2D:
          layer=new NeuralNetLayerPoolAvg(this,op_);
          break;
+      case NeuralNetOperatorMaxPool2D:
+         layer=new NeuralNetLayerPoolMax(this,op_);
+         break;
       case NeuralNetOperatorMean:
          layer=new NeuralNetLayerPoolAvg(this,op_);
          break;
@@ -121,7 +125,8 @@ ZtaStatus NeuralNet::LoadEnd() {
             if(m_operators[j]->GetIoType() != LayerIoPassthrough) {
                for(int k=0;k < (int)m_operators[j]->m_def.input.size();k++) {
                   if(m_operators[j]->m_def.input[k]==output_id){
-                     m_operators[j]->m_def.input[k]=input_id;
+                     //printf("before change: %d, after change: %d\n", m_operators[j]->m_def.input[k], input_id);
+                     m_operators[j]->m_def.input[k]=input_id; //only change buffer id, not shape
                   }
                }
             }

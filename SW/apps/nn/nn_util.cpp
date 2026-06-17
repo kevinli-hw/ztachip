@@ -369,7 +369,8 @@ ZtaStatus NeuralNet::GetTop5(uint8_t *prediction,int predictionSize,int *top5)
    i3=0x00000000;
    i4=0x00000000;
 
-   for(int i=0;i < predictionSize;i++) {
+   //for(int i=0;i < predictionSize;i++) {
+   for(int i=1;i < predictionSize;i++) { // 1001 output
       v=(prediction[i] << 16)+i;
       if(v > i4) {
          i4=v;
@@ -387,11 +388,12 @@ ZtaStatus NeuralNet::GetTop5(uint8_t *prediction,int predictionSize,int *top5)
          }
       }
    }
-   top5[0] = (int)(i0&0xFFFF);
-   top5[1] = (int)(i1&0xFFFF);
-   top5[2] = (int)(i2&0xFFFF);
-   top5[3] = (int)(i3&0xFFFF);
-   top5[4] = (int)(i4&0xFFFF);
+   //1001 index
+   top5[0] = (int)(i0&0xFFFF)-1;
+   top5[1] = (int)(i1&0xFFFF)-1;
+   top5[2] = (int)(i2&0xFFFF)-1;
+   top5[3] = (int)(i3&0xFFFF)-1;
+   top5[4] = (int)(i4&0xFFFF)-1;
    return ZtaStatusOk;
 }
 

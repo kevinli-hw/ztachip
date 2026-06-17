@@ -68,24 +68,28 @@ int test_model(){
    TfliteNn TF2;
    int8_t* result;
    int8_t *input_buf;
+   int input_buf_cnt = 0;
 
-   //std::vector<int> input_dim={3,7,7};
+   //std::vector<int> input_dim={7,3,3};
    //std::vector<int> input_dim={8,7,7};
-   std::vector<int> input_dim={3,4,4};
-   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   //std::vector<int> input_dim={3,4,4};
+   std::vector<int> input_dim={1,4,4};
+   //rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeRGB,input_dim);
+   rc = input.Create(TensorDataTypeInt8,TensorFormatSplit,TensorObjTypeUnknown,input_dim); // input_ch > 3
    //rc = input.Create(TensorDataTypeInt8,TensorFormatInterleaved,TensorObjTypeRGB,input_dim); //DW_conv
 
    //test for conv/fc
-   //input_buf=(int8_t *)input.GetBuf();
-   //memset(input_buf,0,3*7*7);
-   //for(int i = 0; i < 3; i++)
-   //{
-   //  for(int j = 0; j < 7; j++)
-   //  {
-   //    for(int k = 0; k < 7; k++)
-   //        input_buf[k+j*7+i*7*7]=k+i+j;
-   //  }
-   //}
+   input_buf=(int8_t *)input.GetBuf();
+   input_buf_cnt=input_dim[0]*input_dim[1]*input_dim[2];
+   memset(input_buf,0,input_buf_cnt);
+   for(int i = 0; i < input_dim[0]; i++)
+   {
+     for(int j = 0; j < input_dim[1]; j++)
+     {
+       for(int k = 0; k < input_dim[2]; k++)
+           input_buf[k+j*input_dim[2]+i*input_dim[1]*input_dim[2]]=(k+i+j)%128;
+     }
+   }
    //input_buf=(int8_t *)input.GetBuf();
    //memset(input_buf,0,8*7*7);
    //for(int i = 0; i < 8; i++)
@@ -103,16 +107,16 @@ int test_model(){
    //}
    //test for dw_conv
    //split
-   input_buf=(int8_t *)input.GetBuf();
-   memset(input_buf,0,3*4*4);
-   for(int i = 0; i < 3; i++)
-   {
-     for(int j = 0; j < 4; j++)
-     {
-       for(int k = 0; k < 4; k++)
-           input_buf[k+j*4+i*4*4]=k+i+j;
-     }
-   }
+   //input_buf=(int8_t *)input.GetBuf();
+   //memset(input_buf,0,3*4*4);
+   //for(int i = 0; i < 3; i++)
+   //{
+   //  for(int j = 0; j < 4; j++)
+   //  {
+   //    for(int k = 0; k < 4; k++)
+   //        input_buf[k+j*4+i*4*4]=k+i+j;
+   //  }
+   //}
    //interleaved
    //input_buf=(int8_t *)input.GetBuf();
    //memset(input_buf,0,3*4*4);
@@ -130,10 +134,12 @@ int test_model(){
    assert(rc==ZtaStatusOk);
    //TF2.Create("single_fc_int8.tflite",&input,1,&output);
    //TF2.Create("single_conv_int8.tflite",&input,1,&output);
+   //TF2.Create("single_conv_3x3.tflite",&input,1,&output);
    //TF2.Create("mean_model.tflite",&input,1,&output);
    //TF2.Create("dw_conv.tflite",&input,1,&output);
    //TF2.Create("conv_pad_dw_int8.tflite",&input,1,&output);
-   TF2.Create("one_conv.tflite",&input,1,&output);
+   //TF2.Create("one_conv.tflite",&input,1,&output);
+   TF2.Create("single_maxpool_int8.tflite",&input,1,&output);
    graph.Add(&TF2);
    graph.Verify();
 
@@ -141,20 +147,6 @@ int test_model(){
    graph.Prepare();
    graph.RunUntilCompletion();
    FLUSH_DATA_CACHE();
-   {
-   result = (int8_t*)output.GetBuf();
-   //printf("single fc result: ");
-   printf("single conv result: ");
-   //printf("mean result: ");
-   //for (int i=0; i<10; i++)
-   for (int i=0; i<4*4*4; i++)
-   //for (int i=0; i<8; i++)
-   {
-      printf("%d ", result[i]);
-   }
-   printf("\n");
-   }
-
    TF2.Unload();
    return 0;
 }
@@ -212,8 +204,8 @@ int main()
    ztaInit();
 
    //test_model_2();
-   //test_model();
-   test_mobinet();
+   test_model();
+   //test_mobinet();
 
    return 0;
 }

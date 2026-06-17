@@ -26,6 +26,7 @@ _share int16 convolution::bot[CONV_SMALL_BOTSZ];
 _share vint16 convolution::biasHi;
 _share vint16 convolution::biasLo;
 _share vint16 convolution::activation_multiplier;
+_share vint16 convolution::activation_shift;
 vint16 convolution::top[MAX_CONV_Y_DIM];
 int16 *convolution::p;
 int convolution::out_scale;
@@ -52,6 +53,29 @@ _kernel_ void convolution::init(int stride,int conv_dx_log,int mypid,int _out_sc
     dx=_dx;
 }
 
+_kernel_ void convolution::exe5x5(_global int k,_global int offset) {
+   int i,j;
+   int16 *p2;
+
+#pragma unroll
+   for(j=0;j < 5;j++) {
+      _A[k] += p[offset+j]*coef[j];
+   }
+   p2 = p+dx;
+#pragma unroll
+   for(i=1;i < 4;i++) {
+#pragma unroll
+      for(j=0;j < 5;j++) {
+         _A[k] += p2[offset+j]*coef[i*5+j];
+      }
+      p2 += dx;
+   }
+#pragma unroll
+   for(j=0;j < 5;j++) {
+      _A[k] += p2[offset+j]*coef[4*5+j];
+   }
+}
+
 _kernel_ void convolution::exe3x3(_global int k,_global int offset) {
    int i,j;
    int16 *p2;
@@ -75,13 +99,41 @@ _kernel_ void convolution::exe3x3(_global int k,_global int offset) {
    }
 }
 
+_kernel_ void convolution::exe7x7(_global int k, _global int offset) {
+   int i, j;
+   int16 *p2;
+
+#pragma unroll
+   for(j=0; j < 7; j++) {
+      _A[k] += p[offset+j] * coef[j];
+   }
+   p2 = p + dx;
+#pragma unroll
+   for(i=1; i < 6; i++) {
+#pragma unroll
+      for(j=0; j < 7; j++) {
+         _A[k] += p2[offset+j] * coef[i*7+j];
+      }
+      p2 += dx;
+   }
+#pragma unroll
+   for(j=0; j < 7; j++) {
+      _A[k] += p2[offset+j] * coef[6*7+j];
+   }
+}
+
+_kernel_ void convolution::exe1x1(_global int k,_global int offset) {
+   _A[k] += p[offset]*coef[0];
+}
+
 _kernel_ void convolution::activate(_global int idx) {
    top[idx] = _A[idx] >> out_scale;
 }
 
 _kernel_ void convolution::activate_per_channel(_global int idx) {
    _A[idx] = _A[idx] * activation_multiplier;
-   top[idx] = _A[idx] >> out_scale;
+   //top[idx] = _A[idx] >> out_scale;
+   top[idx] = _A[idx] >> activation_shift;
 }
 
 
@@ -92,6 +144,7 @@ _share vint16 convolution_depthwise::bot[CONV_DEPTHWISE_BOTSZ];
 _share vint16 convolution_depthwise::biasHi;
 _share vint16 convolution_depthwise::biasLo;
 _share vint16 convolution_depthwise::activation_multiplier;
+_share vint16 convolution_depthwise::activation_shift;
 vint16 convolution_depthwise::top[CONV_DEPTHWISE_Y_DIM];
 vint16 *convolution_depthwise::p;
 int convolution_depthwise::out_scale;
@@ -172,7 +225,8 @@ _kernel_ void convolution_depthwise::exe3x3_per_channel(_global int k,_global in
       _A[k] += p2[offset+j]*coef[2*3+j];
    }
    _A[k] = _A[k] * activation_multiplier;
-   top[k] = _A[k] >> out_scale;
+   //top[k] = _A[k] >> out_scale;
+   top[k] = _A[k] >> activation_shift;
 }
 
 
@@ -185,6 +239,7 @@ _share int16 convolution1x1::bot[CONV_1X1_BOTSZ];
 _share vint16 convolution1x1::biasHi;
 _share vint16 convolution1x1::biasLo;
 _share vint16 convolution1x1::activation_multiplier;
+_share vint16 convolution1x1::activation_shift;
 _share vint16 convolution1x1::top[CONV_1X1_Y_DIM*NUM_THREAD_PER_CORE];
 int16 *convolution1x1::p;
 vint16 *convolution1x1::p2;
@@ -328,7 +383,8 @@ _kernel_ void convolution1x1::activate(_global int idx,_global int idx2) {
 
 _kernel_ void convolution1x1::activate_per_channel(_global int idx,_global int idx2)  {
    _A[idx] = _A[idx] * activation_multiplier;
-   p2[idx2] = _A[idx] >> out_scale;
+   //p2[idx2] = _A[idx] >> out_scale;
+   p2[idx2] = _A[idx] >> activation_shift;
 }
 
 

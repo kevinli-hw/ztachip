@@ -33,3 +33,8 @@ _kernel_ void test::quant_mul() {
    //_Z=_T*_B;
    _Z=_A*_B;
 }
+_kernel_ void test::shift_r_v() { 
+   _VMASK=-1;
+   _T=_A;
+   _Z=_T>>_B;
+}

@@ -16,6 +16,7 @@ PROJ_NAME=ztachip
 
 UNIT_TEST=yes
 PRINTF_LOG=no
+STEP_MODE=no
 LLM_TEST=no
 
 
@@ -63,6 +64,7 @@ SRCS = 	base/simplelib.c \
 	apps/nn/nn_poolavg.cpp \
 	apps/nn/nn_reshape.cpp \
 	apps/nn/nn_pad.cpp \
+	apps/nn/nn_poolmax.cpp \
 	apps/nn/nn_util.cpp \
 	apps/nn/tf.cpp \
 	apps/nn/tf_util.cpp \
@@ -134,6 +136,10 @@ endif
 
 ifeq ($(PRINTF_LOG),yes)
 	CFLAGS += -DPRINTF_LOG_ON
+endif
+
+ifeq ($(STEP_MODE),yes)
+	CFLAGS += -DSTEP_MODE_ON
 endif
 
 ifeq ($(LLM_TEST),yes)

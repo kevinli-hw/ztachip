@@ -78,6 +78,8 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
          return NeuralNetOperatorAdd;
       case BuiltinOperator_AVERAGE_POOL_2D:
          return NeuralNetOperatorAvgPool2D;
+      case BuiltinOperator_MAX_POOL_2D:
+         return NeuralNetOperatorMaxPool2D;
       case BuiltinOperator_CONV_2D:
          return NeuralNetOperatorConv2D;
       case BuiltinOperator_DEPTHWISE_CONV_2D:
@@ -210,23 +212,23 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
   //   return ZtaStatusFail;
   //}
   if (num_channels == 1){
-    *per_tensor = true;
-    *per_channel = false;
+    if(per_tensor)  *per_tensor = true;
+    if(per_channel) *per_channel = false;
   }else{
-    *per_tensor = false;
-    *per_channel = true;
+    if(per_tensor)  *per_tensor = false;
+    if(per_channel) *per_channel = true;
   }
+  
   if (num_channels > 1)
   {
     // per-channel quantization
-    int max_shift = -31;
     int32_t significand = 0;
     int shift = 0;
 
     for (int i = 0; i < num_channels; ++i) {
       const double filter_scale = static_cast<double>(filter_scales[i]);
       const double effective_output_scale = static_cast<double>(input_scale) * filter_scale / static_cast<double>(output_scale);
-      output_scale_per_channel->push_back(effective_output_scale);
+      if(output_scale_per_channel) output_scale_per_channel->push_back(effective_output_scale);
       if (effective_output_scale == 0.) {
         significand = 0;
         shift = 0;
@@ -235,8 +237,15 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
         int32_t q_fixed = static_cast<int32_t>(round(q * (1ll << 15)));
         assert(q_fixed <= (1ll << 15));
         if (q_fixed == (1ll << 15)) {
-          q_fixed /= 2;
-          ++shift;
+          //q_fixed /= 2;
+          //++shift;
+          q_fixed = (1ll << 15) - 1;
+          //printf("scale close to 1\n");
+        }
+        if (shift > 0){
+          q_fixed = (1ll << 15) - 1;
+          shift = 0;
+          //printf("scale > 1\n");
         }
        if (shift < -31) {
           shift = 0;
@@ -244,8 +253,6 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
         }
         significand = static_cast<int16_t>(q_fixed);
       }
-      if (shift > max_shift)
-        max_shift = shift;
       if(multiplier_per_channel)
         multiplier_per_channel->push_back(significand);
       if(shift_per_channel)
@@ -255,13 +262,20 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     //per-channel multiplier, per-tensor shift
     for (int i = 0; i < num_channels; i++)
     {
-      while((*shift_per_channel)[i] < max_shift){
-        (*multiplier_per_channel)[i] /= 2;
-        (*shift_per_channel)[i]++;
+      //while((*shift_per_channel)[i] < max_shift){
+      //  (*multiplier_per_channel)[i] /= 2;
+      //  (*shift_per_channel)[i]++;
+      //}
+      //if ((*shift_per_channel)[i] < max_shift){
+      //  int shift_adjust = max_shift-(*shift_per_channel)[i];
+      //  (*multiplier_per_channel)[i] = ((*multiplier_per_channel)[i] + (1 << (shift_adjust-1))) >> shift_adjust;
+      //  (*shift_per_channel)[i] = max_shift;
+      //}
+      if(shift_per_channel){
+        if ((*shift_per_channel)[i] > 0)
+          assert(0);
+        (*shift_per_channel)[i] = -(*shift_per_channel)[i];
       }
-      if ((*shift_per_channel)[i] > 0)
-        assert(0);
-      (*shift_per_channel)[i] = -(*shift_per_channel)[i];
     }
   }
   // per-tensor quantization
@@ -303,7 +317,6 @@ void TfliteNn::CalculateActivationRangeQuantizedImpl(NeuralNetActivation activat
                                            int32_t* act_min, int32_t* act_max) {
   const float scale = output->quantization.m_scale[0];
   const int32_t zero_point = output->quantization.m_zeroPoint[0];
-
   auto quantize = [scale, zero_point](float f) {
     return zero_point + static_cast<int32_t>(round(f / scale));
   };
@@ -362,7 +375,6 @@ void TfliteNn::CalculateActivationRangeInt8(NeuralNetActivation activation,
                                   int32_t* act_max) {
   const int32_t qmin = std::numeric_limits<int8_t>::min();
   const int32_t qmax = std::numeric_limits<int8_t>::max();
-
   CalculateActivationRangeQuantizedImpl(activation, qmin, qmax, output, act_min,
                                         act_max);
 }

@@ -47,7 +47,8 @@
 
 // Max shift distance
 
-#define MAX_SHIFT_DISTANCE  3
+//#define MAX_SHIFT_DISTANCE  3  //v0
+#define MAX_SHIFT_DISTANCE  31  //v1
 
 // Number of threads
 

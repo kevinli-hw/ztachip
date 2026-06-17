@@ -79,6 +79,7 @@ typedef enum {
    NeuralNetOperatorDetection,
    NeuralNetOperatorAdd,
    NeuralNetOperatorAvgPool2D,
+   NeuralNetOperatorMaxPool2D,
    NeuralNetOperatorFC,
    NeuralNetOperatorMean,
    NeuralNetOperatorUnknown,
@@ -138,6 +139,9 @@ struct NeuralNetOperatorDef {
          uint8_t *filter;
          std::vector<int> *filter_shape;
          std::vector<int> *bias_shape;
+         int32_t fc_spatial_H;
+         int32_t fc_spatial_W;
+         int32_t fc_spatial_C;
       } conv;
       struct {
          size_t size;
@@ -212,6 +216,7 @@ struct NeuralNetOperatorDef {
          int32_t pad_h;
          int32_t activation_min;
          int32_t activation_max;
+         bool    keep_dims; // for mean
       } pool_avg;
    } u;
 };
