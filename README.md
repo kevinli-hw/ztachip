@@ -1,373 +1,268 @@
-# Introduction
+# ztachip — Per-Channel Quantization Extension (`feature/ZTA-Q`)
 
-Ztachip is a Multicore, Data-Aware, Embedded RISC-V AI Accelerator for Edge Inferencing running on low-end FPGA devices or custom ASIC.
+This repository is a **fork of [ztachip](https://github.com/ztachip/ztachip)**, the multicore,
+data-aware, embedded RISC-V AI accelerator for edge inferencing on low-end FPGAs/ASICs.
 
-Acceleration provided by ztachip can be up to 20-50x compared with a non-accelerated RISCV implementation
-on many vision/AI tasks. ztachip performs also better when compared with a RISCV that is equipped with vector extension.
+Upstream ztachip runs INT8 CNNs using a single **per-tensor** requantization scale. This fork
+**extends ztachip's quantization scheme to full per-channel (per-output-channel) requantization**,
+matching the format produced by TensorFlow Lite's full-integer post-training quantization. With
+per-channel requant in place, the accelerator reaches **TFLite-level accuracy** on a set of
+standard image-classification models that previously could not be run faithfully:
 
-An innovative tensor processor hardware is implemented to accelerate a wide range of different tasks from
-many common vision tasks such as edge-detection, optical-flow, motion-detection, color-conversion
-to executing TensorFlow AI models. This is one key difference of ztachip when compared with other accelerators
-that tend to accelerate only a narrow range of applications only (for example convolution neural network only).
+- **LeNet-5** (MNIST)
+- **MobileNetV1** (ImageNet-1k)
+- **MobileNetV2** (ImageNet-1k, both `uint8` and `int8` quantized variants)
+- **ResNet-18** (ImageNet-1k)
 
-A new tensor programming paradigm is introduced to allow programmers to leverage the massive processing/data parallelism enabled by ztachip tensor processor.
+All of the work described here lives on the **`feature/ZTA-Q`** branch.
 
-![Ztachip Architecture](./Documentation/images/ztachip_arch.png)
+## Accuracy
 
-# Features
-## Hardware
-Ztachip consists of the following functional units tied via an AXI Bus to a VexRicsv CPU, a DRAM and other
-peripherals as follows
-1. The Mcore, a Scheduling Processor
-2. A Dataplane, to stream the next data and instruction to the Tensor Engine .
-3. A Scratch-Pad Memory to temporarily hold data
-4. A Stream Processor to manage data IO
-5. Tensor Engine with 28x Pcores that can be configured to act like a systolic array to perform in memory compute each containing a Scalar and Vector ALU, with 16 Threads of execution on private memory.
+End-to-end Top-1 / Top-5 accuracy, evaluated on the ImageNet-1k validation set (MobileNet, ResNet)
+and the MNIST test set (LeNet). For each model three numbers are reported:
 
-## Software
-The software provided consists of 
-1. Ztachip DSL C-like compiler
-2. AI vision libraries
-3. Application examples
-4. Micropython port and examples
+- **TF Float** — the original floating-point model (reference upper bound).
+- **TFLite** — the full-integer INT8 `.tflite` model run with the TensorFlow Lite interpreter on a PC (the target we want to match).
+- **FPGA** — the same INT8 model run on ztachip on an Arty A7-100T board.
 
-## Demo
+| Model                    | Top-1 TF Float | Top-1 TFLite | Top-1 FPGA | Top-5 TF Float | Top-5 TFLite | Top-5 FPGA | Inference time / image |
+| ------------------------ | :------------: | :----------: | :--------: | :------------: | :----------: | :--------: | :--------------------: |
+| MobileNetV2 `[uint8-q]`  |       –¹       |    71.12%    |   71.10%   |       –¹       |    89.96%    |   89.88%   |        170.0 ms        |
+| MobileNetV2 `[int8-q]`   |     71.48%     |    70.72%    |   70.68%   |     90.27%     |    89.88%    |   89.90%   |        170.2 ms        |
+| MobileNetV1              |     70.32%     |    68.95%    |   68.95%   |     89.44%     |    88.56%    |   88.57%   |        256.4 ms        |
+| LeNet-5                  |     99.20%     |    99.19%    |   99.21%   |      100%      |     100%     |    100%    |         22.4 ms        |
+| ResNet-18                |     69.81%     |    69.57%    |   69.50%   |     89.11%     |    88.93%    |   88.91%   |         1.22 s         |
 
-[![ztachip demo video](Documentation/images/demo_video.bmp)](https://www.youtube.com/watch?v=nLGmmw7-PYs)
+> ¹ The `uint8` MobileNetV2 is consumed as a pre-quantized TFLite model, so no separate
+> floating-point baseline was measured for it.
 
-# Documentation
+The **FPGA column tracks the TFLite column to within a few hundredths of a percent** across all
+models, which is the goal of this work: the hardware/software implementation of per-channel
+requantization is numerically faithful to the reference TFLite kernels.
+
+---
+
+## Implementation — hardware/software co-design (`feature/ZTA-Q`)
+
+Per-channel requantization means every output channel of a conv / depthwise-conv / fully-connected
+layer carries its **own `(multiplier, shift)` pair** (TFLite's
+`MultiplyByQuantizedMultiplier`). Upstream ztachip applied a single per-tensor scale, so the
+extension touches the whole stack — the tensor-engine ALU, the DSL compiler, the kernel library,
+and the stream/scalar processor activation path.
+
+### 1. Two new tensor-engine micro-instructions
+
+| Opcode | Name        | Semantics | Role |
+| -----: | ----------- | --------- | ---- |
+| 13     | `QUANT_MUL` | `Y = round((x1 × x2) >> 15)` — saturating-rounding-doubling-high-multiply | The **multiplier** half of requantization, evaluated at full accumulator width in one ALU pass. |
+| 14     | `SHRA_V`    | Arithmetic shift-right where the **shift count comes from a vector register** (per lane) | The **shift** half of requantization; because the count is per-lane, each output channel can shift by a different amount. |
+
+Together they let a Pcore apply a *distinct* `(multiplier, shift)` per output channel, in place on
+the 32-bit accumulator — replacing the previous single per-tensor scale.
+
+- **ALU hardware** — [`HW/quant_mul/src/alu/alu.vhd`](HW/quant_mul/src/alu/alu.vhd)
+  - `QUANT_MUL` datapath: reuses the shared multiplier at `2×` accumulator width, applies the
+    rounding *nudge* (`quant_mul_nudge_pos/neg`) and an arithmetic right shift by
+    `quant_mul_shift_distance`, matching TFLite's `SaturatingRoundingDoublingHighMul` rounding.
+  - `SHRA_V` vector-shift path.
+- **HW package** — [`HW/quant_mul/src/ztachip_pkg.vhd`](HW/quant_mul/src/ztachip_pkg.vhd): opcode
+  constants (`mu_opcode_quant_mul_c`, `mu_opcode_shra_v_c`) and the shift-distance constant.
+
+### 2. DSL compiler support
+
+The new opcodes are taught to the ztachip C-like DSL compiler:
+
+- [`SW/compiler/config.h`](SW/compiler/config.h) — `OPCODE_QUANT_MUL = 13`, `OPCODE_SHRA_V = 14`.
+- [`SW/compiler/config.cpp`](SW/compiler/config.cpp) — opcode table entries (operand kinds / data types).
+- [`SW/compiler/gen.cpp`](SW/compiler/gen.cpp) — code generation emits `QUANT_MUL`.
+- [`SW/compiler/instruction.cpp`](SW/compiler/instruction.cpp) — instruction encoding / scheduling for the new ALU ops.
+
+### 3. Kernel-library extension
+
+New per-channel activation kernels were added to ztachip's neural-net kernel library, using the
+`QUANT_MUL` + `SHRA_V` idiom (`_A = _A * multiplier; top = _A >> shift;`, with `multiplier`/`shift`
+as per-channel vectors):
+
+- [`SW/apps/nn/kernels/conv.p`](SW/apps/nn/kernels/conv.p)
+  - `convolution::activate_per_channel`
+  - `convolution1x1::activate_per_channel`
+  - `convolution_depthwise::exe3x3_per_channel`
+- [`SW/apps/nn/kernels/fcn.p`](SW/apps/nn/kernels/fcn.p)
+  - `inner_product::activate_per_channel` — per-channel fully-connected layer.
+
+### 4. Stream/scalar-processor activation path
+
+The per-channel multiplier/shift tables are loaded from the model and the post-multiply stage
+(adding the output zero-point and clamping to INT8) is handled by
+`SpuEvalActivation_Per_Channel`:
+
+- [`SW/apps/nn/nn_conv2d.cpp`](SW/apps/nn/nn_conv2d.cpp) — `SpuEvalActivation_Per_Channel`
+  ([line 355](SW/apps/nn/nn_conv2d.cpp:355)) wired into the conv layer
+  ([line 166](SW/apps/nn/nn_conv2d.cpp:166)).
+
+---
+
+## Testing
+
+Accuracy is measured by running the **same INT8 `.tflite` model** in three places and comparing:
+the float reference, the PC TFLite interpreter, and ztachip on the FPGA. The FPGA runs are driven
+by the batch test harness in the repository root:
+
+| Script | Model(s) | Dataset |
+| ------ | -------- | ------- |
+| [`batch_lenet_test.py`](batch_lenet_test.py)        | LeNet-5            | MNIST test |
+| [`batch_imagenet_test.py`](batch_imagenet_test.py)  | MobileNetV1 / V2  | ImageNet-1k val |
+| [`batch_resnet18_test.py`](batch_resnet18_test.py)  | ResNet-18         | ImageNet-1k val |
+
+### How the harness works (common to all three scripts)
+
+The scripts drive the FPGA over JTAG (OpenOCD + GDB) and capture results over UART. One persistent
+GDB process drives the whole batch:
+
+1. **Startup (once):** `set pagination off` → `file ztachip.elf` → `target extended-remote
+   localhost:3333` → `monitor reset halt` → `load` → `break test` → `continue` (runs `crt0` +
+   `main()`, halts at the first call to `test()`).
+2. **Per image:**
+   - preprocess the image in Python (see per-model details below),
+   - `restore` the preprocessed bytes directly into target memory while the CPU is halted,
+   - flush the serial buffer and start a `sed '/TEST_MODEL_PASS_END/q' /dev/ttyUSBx > capture.bin`
+     (UART bytes are captured by `sed` reading the tty directly — more reliable than `pyserial` at 4 Mbaud),
+   - `continue` — the firmware runs one inference, prints `RESULT top1=… … top5=…`, loops back to
+     `while(1)` and calls `test()` again, hitting the breakpoint,
+   - parse the top-5 ids from the capture and accumulate Top-1 / Top-5 hit counts.
+3. **Output:** a `results.csv` with the per-image predictions, from which Top-1/Top-5 accuracy is computed.
+
+The firmware entry point is [`SW/src/test.cpp`](SW/src/test.cpp): `test()` dispatches to
+`test_lenet()`, `test_mobilenet_v2()` or `test_resnet18()`, each of which calls
+`TF2.Create("<model>.tflite", …)`, runs inference, and prints the `RESULT … / TEST_MODEL_PASS_END`
+markers the harness keys on.
+
+> **Selecting a model:** edit `test()` in [`SW/src/test.cpp`](SW/src/test.cpp) to call the desired
+> `test_*()`, make sure the matching `.tflite` is embedded in the firmware filesystem (`SW/fs`),
+> and rebuild (see *Build & run on FPGA* below).
+
+### Per-model preparation
+
+For each model the steps are: **download → quantize (INT8 TFLite) → embed → preprocess → run.**
+The download + quantization steps are done offline on a PC; the resulting `.tflite` is embedded
+into the firmware. Full-integer post-training quantization is the standard TFLite recipe and is
+what produces the **per-channel** weight scales this fork consumes:
+
+```python
+import tensorflow as tf
+
+converter = tf.lite.TFLiteConverter.from_keras_model(model)   # or from_saved_model(...)
+converter.optimizations          = [tf.lite.Optimize.DEFAULT]
+converter.representative_dataset = representative_data_gen     # ~100–500 calibration images
+converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+converter.inference_input_type   = tf.int8     # tf.uint8 for the uint8 MobileNetV2 variant
+converter.inference_output_type  = tf.int8
+open("model_int8.tflite", "wb").write(converter.convert())
+```
+
+#### LeNet-5 — MNIST  →  `lenet_mnist_int8.tflite`
+
+- **Download / train:** a small LeNet-5 CNN trained on MNIST.
+- **Quantize:** full-integer INT8 (input `scale ≈ 1/255`, `zero_point = -128`).
+- **Preprocess** (in [`batch_lenet_test.py`](batch_lenet_test.py)): grayscale, resize to 28×28
+  (bilinear), quantize `q = round(pixel/255 / scale) + zp = pixel − 128`, emit a raw **784-byte**
+  INT8 buffer restored directly to `&classifier_input`.
+- **Run:**
+  ```bash
+  python3 batch_lenet_test.py \
+      --images  <mnist_test_images_dir> \
+      --labels  label_test.txt \
+      --elf     SW/build/ztachip.elf \
+      --port    /dev/ttyUSB1 --baud 4000000 \
+      --output  lenet_results.csv
+  ```
+  Image layout: `test_images/<digit>/test_NNNNN.png`; label file lines: `<subfolder/file> <label>`.
+
+#### MobileNetV1 / MobileNetV2 — ImageNet  →  `mobilenet_v1_int8_bs1.tflite`, `mobilenet_v2_int8_bs1.tflite`, `mobilenet_v2_1_0_224_quant.tflite`
+
+- **Download:**
+  - `uint8` MobileNetV2 — the official pre-quantized model
+    [`mobilenet_v2_1.0_224_quant.tflite`](https://storage.googleapis.com/download.tensorflow.org/models/tflite_11_05_08/mobilenet_v2_1.0_224_quant.tgz).
+  - `int8` MobileNetV1/V2 — start from `tf.keras.applications.MobileNet` / `MobileNetV2`
+    (ImageNet weights) and quantize with the recipe above.
+- **Preprocess** (in [`batch_imagenet_test.py`](batch_imagenet_test.py)): resize shorter side to
+  256 (bilinear), center-crop 224×224, write a 24-bit **uint8 BMP** (150582 bytes = 14+40+224·672)
+  restored to `&classifier_input`. No `−128` / normalization in Python:
+  - for the `uint8` model (`scale = 0.0078125`, `zp = 128`) the `(x−128)·scale` happens inside the model;
+  - for the `int8`-input model the firmware's `CreateWithBitmap(..., TensorDataTypeInt8)` subtracts 128.
+- **Run:**
+  ```bash
+  python3 batch_imagenet_test.py \
+      --images  <imagenet_val_dir> \
+      --test-list <manifest.txt> \      # or --labels <file> --start N --count M
+      --elf     SW/build/ztachip.elf \
+      --port    /dev/ttyUSB1 --baud 4000000 \
+      --output  mobilenet_results.csv
+  ```
+  > MobileNet outputs **1001** classes (background at id 0); use a 1001-class label manifest.
+
+#### ResNet-18 — ImageNet  →  `resnet18_full_integer_quant.tflite`
+
+- **Download:** a ResNet-18 trained on ImageNet (e.g. a Keras ResNet-18 or torchvision
+  `resnet18` exported to TF/ONNX→TF), then quantized full-integer INT8.
+- **Preprocess** (in [`batch_resnet18_test.py`](batch_resnet18_test.py)), matching the golden
+  PyTorch-style flow: resize shorter side to 256 (bilinear) → 224×224 center crop → `float/255` →
+  normalize with ImageNet mean/std (stays RGB) → quantize `q = round(x/scale + zp)`
+  (`scale = 0.01865844801068306`, `zp = -14`, clip INT8) → **HWC→CHW** → raw **150528-byte** buffer.
+  The buffer is `restore`d over the `ILSVRC2012_val_00000001_raw` array (mapped by the firmware's
+  fake filesystem in [`SW/base/simplelib.c`](SW/base/simplelib.c)).
+- **Run:**
+  ```bash
+  python3 batch_resnet18_test.py \
+      --images  <imagenet_val_dir> \
+      --test-list <manifest.txt> \
+      --elf     SW/build/ztachip.elf \
+      --port    /dev/ttyUSB1 --baud 4000000 \
+      --output  resnet18_results.csv
+  ```
+  > ResNet-18 outputs **1000** classes (no background); the manifest's label ids must use 0..999 indexing.
+
+### Build & run on the Arty A7-100T FPGA
+
+The batch scripts above assume a programmed board and a running OpenOCD/GDB + UART session. End to end:
+
+1. **Build the FPGA bitstream** (Xilinx Vivado, Arty A7-100T) from the RTL in `HW/`, including the
+   per-channel ALU in [`HW/quant_mul/src`](HW/quant_mul/src). Program the board; confirm the green
+   "done" LED. See [`Documentation/Vivado.md`](Documentation/Vivado.md).
+
+2. **Build the firmware** with the desired model. Select it in `test()`
+   ([`SW/src/test.cpp`](SW/src/test.cpp)), place the matching `.tflite` in `SW/fs`, then:
+   ```bash
+   export PATH=/opt/riscv/bin:$PATH
+   cd SW/compiler && make clean all          # build the DSL compiler (incl. QUANT_MUL/SHRA_V)
+   cd ../fs       && python3 bin2c.py         # embed models/inputs into the firmware filesystem
+   cd ..          && make clean all -f makefile.kernels
+   make clean all                            # produces SW/build/ztachip.elf
+   ```
+
+3. **Start JTAG (OpenOCD)** on the Linux host so GDB can load the ELF on port 3333:
+   ```bash
+   cd <openocd_riscv installation folder>
+   sudo src/openocd -f usb_connect.cfg -c 'set MURAX_CPU0_YAML cpu0.yaml' -f soc_init.cfg
+   ```
+
+4. **Connect UART** — Arty A7 exposes the serial port over USB (e.g. `/dev/ttyUSB1`) at **4 Mbaud**,
+   flow control disabled. This is the channel the harness captures `RESULT …` lines from.
+
+5. **Run a batch test** — invoke the matching `batch_*_test.py` from the table above. The script
+   loads `ztachip.elf` via GDB, streams preprocessed images into target memory, captures each
+   inference's UART output, and writes Top-1/Top-5 results to its `--output` CSV.
+
+---
+
+## Upstream documentation
+
+This fork keeps ztachip's original architecture, programming model, and build system. For the
+accelerator internals and the DSL, see upstream:
 
 1. [Technical overview](Documentation/Overview.md)
-
 2. [Hardware Architecture](Documentation/HardwareDesign.md)
+3. [Programmer's Guide](https://github.com/ztachip/ztachip/raw/master/Documentation/ztachip_programmer_guide.pdf)
+4. [VisionAI Stack Programmer's Guide](https://github.com/ztachip/ztachip/raw/master/Documentation/visionai_programmer_guide.pdf)
 
-3. [Programmers Guide](https://github.com/ztachip/ztachip/raw/master/Documentation/ztachip_programmer_guide.pdf)
-
-4. [VisionAI Stack Programmers Guide](https://github.com/ztachip/ztachip/raw/master/Documentation/visionai_programmer_guide.pdf)
-
-5. [MicroPython Programmers Guide](micropython/MicropythonUserGuide.md)
-
-# Code structure
-
-```
-.
-├── Documentation         Overview on HW/SW and programmer's guide for ztachip, pcore, visionai and tensor
-├── HW                    Hardware
-│   ├── examples          Reference Design: Integration of Vexriscv, Ztachip, DDR3, VGA, Camera, LEDs & Buttons
-│   ├── platform          Memory IP depenedencies for different FPGA synthesis (e.g. XIlinx, Altera) or ASIC
-│   ├── simulation        RTL Simulation
-│   └── src               RTL of Ztachip's top design, Scalar/Vector ALU, Dataplane, Pcore, SoC integration etc
-├── LICENSE.md
-├── micropython           Micropython Support
-│   ├── examples          edge_detection, image_classification, motion_detect, object_detect, point_of_interest etc
-│   ├── micropython       micropython
-│   └── ztachip_port      ztachip micropython port
-├── README.md
-├── SW                    Software
-│   ├── apps              AI kernel libraries of canny edge detector, harris corner, neural nets, optical flow etc
-│   ├── base              C runtime zero, Ztachip application libraries and other utilities
-│   ├── compiler          Ztachip C-like DSL compiler that generates instructions for the tensor processor
-│   ├── fs                File for data inference to be downloaded together with the build image
-│   ├── linker.ld         linker script for Ztachip
-│   ├── makefile          Main project makefile
-│   ├── makefile.kernels  Kernel makefile
-│   ├── makefile.sim      Makefile to test Kernels
-│   ├── sim               C source to test kernels
-│   └── src               SW Main (visionai and unit test entry points), SoC drivers and Zta's micropython API
-│                         This is a good place to learn on how to use ztachip prebuilt vision and AI stack.
-└── tools                 openocd and vexriscv interface descriptions
-```
-
-In `HW/platform`, a generic implementation is also provided for simulation environment. Any FPGA/ASIC can be supported with the appropriate implementation of this wrapper layer. Choose the appropriate sub-folder that corresponds to your FPGA target.
-
-Also, in `SW/apps`, many prebuilt acceleration functions are provided to provide programmers with a fast path to leverage ztachip acceleration. This folder is also a good place to learn on how to program your own custom acceleration functions.
-
-# SW build procedure
-
-There are several demos available which demonstrate various capabilities of ztchip.
-Choose to build one of the 3 demos described below.
-
-## Prerequisites (Ubuntu)
-
-```
-sudo apt-get install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev python3-pip
-pip3 install numpy
-```
-
-## Download and build RISCV tool chain
-
-The build below is a pretty long.
-
-```
-export PATH=/opt/riscv/bin:$PATH
-git clone https://github.com/riscv/riscv-gnu-toolchain
-cd riscv-gnu-toolchain
-./configure --prefix=/opt/riscv --with-arch=rv32im --with-abi=ilp32
-sudo make
-```
-
-## Download ztachip
-```
-git clone https://github.com/ztachip/ztachip.git
-```
-
-## Build procedure for demo #1 - AI+Vision
-This demo demonstrates many vision and AI capabilities using a native [C/C++ library interface](https://github.com/ztachip/ztachip/raw/master/Documentation/visionai_programmer_guide.pdf)
-
-This demo is shown in this [video](https://www.youtube.com/watch?v=amubm828YGs)
-
-```
-export PATH=/opt/riscv/bin:$PATH
-cd ztachip
-cd SW/compiler
-make clean all
-cd ../fs
-python3 bin2c.py
-cd ..
-make clean all -f makefile.kernels
-make clean all
-```
-
-## Build procedure for demo #2 - AI+Vision+Micropython
-This example is similar to example 1 except that the program is using a [Python programming interface](micropython/MicropythonUserGuide.md)
-
-This demo is shown in this [video](https://www.youtube.com/watch?v=nLGmmw7-PYs)
-
-You are required to complete first the build procedure for demo #1 above.
-Then follow with a micropython build below.
-
-```
-git clone https://github.com/micropython/micropython.git
-cd micropython/ports
-cp -avr <ztachip installation folder>/micropython/ztachip_port .
-cd ztachip_port
-export PATH=/opt/riscv/bin:$PATH
-export ZTACHIP=<ztachip installation folder>
-make clean
-make
-```
-
-## Build procedure for demo #3 - LLM chatbot 
-This demo demonstrates a LLM chatbot running SmolLM2 model. SmolLM2 is based LLAMA architecture but trained by HuggingFace team.
-
-Update the following variable in SW/makefile
-```
-LLM_TEST=yes
-```
-Then proceed with similar build procedure of demo #1.
-
-### Quantizing LLM model required by demo #3
-
-Demo #3 requires a quantized LLM model to be prepared. Follow the steps below.
-
-- Download SmolLM2-135M-Instruct from HuggingFace
-
-```
-git clone git@hf.co:HuggingFaceTB/SmolLM2-135M-Instruct
-```
-
-- Install [llama.cpp](https://github.com/ggml-org/llama.cpp)
-
-- From llama.cpp installation, convert the downloaded model to GGUF format (FP32). GGUF format is the LLM format used by the popular Ollama inferencing engine.
-
-```
-cd <llama_cpp-install-folder>
-python convert_hf_to_gguf.py <model-download-folder>/SmolLM2-135M-Instruct --outfile SmolLM2-135M-Instruct.gguf --outtype f32
-```
-
-- Quantize the model to ztachip ZUF format.
-
-```
-export PATH=/opt/riscv/bin:$PATH
-cd ztachip/SW
-make clean all -f makefile.quant
-./build/quant ZTA Q4 SmolLM2-135M-Instruct.gguf SMOLLM2.ZUF
-```
-
-- Copy SMOLLM2.ZUF to a Micro-SSD card and plug the card to Micro-SSD card slot of the dev-kit.
-
-# FPGA build procedure
-
-- Download Xilinx Vivado Webpack free edition.
-
-- Create the project file, build FPGA image and program it to flash as described in
-[FPGA build procedure](Documentation/Vivado.md)
-
-# Running the demos.
-
-The following demos are demonstrated on the [ArtyA7-100T FPGA development board](https://digilent.com/shop/arty-a7-artix-7-fpga-development-board/).
-
-- Image classification with TensorFlow's Mobinet
-
-- Object detection with TensorFlow's SSD-Mobinet
-
-- Edge detection using Canny algorithm
-
-- Point-of-interest using Harris-Corner algorithm
-
-- Motion detection
-
-- Multi-tasking with ObjectDetection, edge detection, Harris-Corner, Motion Detection running at
-same time
-
-To run the demo, press button0 to switch between different AI/vision applications.
-
-## Preparing hardware
-
-Reference design example required the hardware components below... 
-
-- [Arty A7-100T development board](https://digilent.com/shop/arty-a7-artix-7-fpga-development-board/)
-
-- [VGA module](https://digilent.com/shop/pmod-vga-video-graphics-array/)
-
-- [Camera module](https://www.amazon.ca/640X480-Interface-Exposure-Control-Display/dp/B07PX4N3YS/ref=sr_1_2_sspa?gclid=EAIaIQobChMIttra8bjo-QIVCMqzCh27tA5XEAAYASAAEgKJTPD_BwE&hvadid=596026577980&hvdev=c&hvlocphy=9000555&hvnetw=g&hvqmt=e&hvrand=6338354247560979516&hvtargid=kwd-296249713094&hydadcr=13589_13421122&keywords=ov7670+camera+module&qid=1661652319&sr=8-2-spons&psc=1&spLa=ZW5jcnlwdGVkUXVhbGlmaWVyPUEzVDhCRUlYWEJZUU8xJmVuY3J5cHRlZElkPUEwMDExNDE5M1ZRSEw3WDdEWk9VWiZlbmNyeXB0ZWRBZElkPUEwMTgwOTYwWTFXWUNPWE8xQzk2JndpZGdldE5hbWU9c3BfYXRmJmFjdGlvbj1jbGlja1JlZGlyZWN0JmRvTm90TG9nQ2xpY2s9dHJ1ZQ==)
-
-- [Wifi+MicroSD](https://www.adafruit.com/product/4285)
-
-Attach the VGA and Camera modules to Arty-A7 board according to picture below 
-
-![arty_board](Documentation/images/arty_board.bmp)
-
-Connect camera_module to Arty board according to picture below
-
-![camera_to_arty](Documentation/images/camera_and_arty_connect.bmp)
-
-## Open serial port
-
-If you are running ztachip's micropython image, then you need to connect to the serial port. Arty-A7 provides serial port connectivity via USB. Serial port flow control must be disabled.
-
-```
-sudo minicom -w -D /dev/ttyUSB1
-```
-
-Note: After the first time connecting to serial port, reset the board again (press button next to USB port and wait for led to turn green) since USB serial must be the first device to connect to USB before ztachip.
-
-## Download and build OpenOCD package required for GDB debugger's JTAG connectivity
-
-In this example, we will load the program using GDB debugger and JTAG
-
-```
-sudo apt-get install libtool automake libusb-1.0.0-dev texinfo libusb-dev libyaml-dev pkg-config
-git clone https://github.com/SpinalHDL/openocd_riscv
-cd openocd_riscv
-./bootstrap
-./configure --enable-ftdi --enable-dummy
-make
-cp <ztachip installation folder>/tools/openocd/soc_init.cfg .
-cp <ztachip installation folder>/tools/openocd/usb_connect.cfg .
-cp <ztachip installation folder>/tools/openocd/xilinx-xc7.cfg .
-cp <ztachip installation folder>/tools/openocd/jtagspi.cfg .
-cp <ztachip installation folder>/tools/openocd/cpu0.yaml .
-```
-
-## Launch OpenOCD
-
-Make sure the green led below the reset button (near USB connector) is on. This indicates that FPGA has been loaded correctly.
-Then launch OpenOCD to provide JTAG connectivity for GDB debugger
-
-```
-cd <openocd_riscv installation folder>
-sudo src/openocd -f usb_connect.cfg -c 'set MURAX_CPU0_YAML cpu0.yaml' -f soc_init.cfg
-```
-
-## Uploading SW image via GDB debugger
-
-### Upload procedure for demo#1 and demo#3 (without micro-python)
-Open another terminal, then issue commands below to upload the standalone image
-
-```
-export PATH=/opt/riscv/bin:$PATH
-cd <ztachip installation folder>/SW/src
-riscv32-unknown-elf-gdb ../build/ztachip.elf
-```
-
-### Upload procedure for demo#2 (micro-python)
-Open another terminal, then issue commands below to upload the micropython image.
-
-```
-export PATH=/opt/riscv/bin:$PATH
-cd <Micropython installation folder>/ports/ztachip_port
-riscv32-unknown-elf-gdb ./build/firmware.elf
-```
-
-### Start the image transfer
-
-From GDB debugger prompt, issue the commands below
-This step takes some time since some AI models are also transfered.
-
-```
-set pagination off
-target remote localhost:3333
-set remotetimeout 60
-set arch riscv:rv32
-monitor reset halt
-load
-```
-
-## Run the program
-
-After sucessfully loading the program, issue command below at GDB prompt
-
-```
-continue
-```
-
-### Running demo #1
-If you are running demo #1, press button0 to switch between different AI/vision applications. The sample application running is implemented in [vision_ai.cpp](SW/src/vision_ai.cpp)
-
-### Running demo #2
-If you are running the micropython image, Micropython allows for entering python code in paste mode at the serial port.  
-To use the paste mode, hit Ctrl+E then paste one of the [examples](micropython/examples/) to the serial port, then hit ctrl+D to execute the python code.
-
-Hit any button to return back to Micropython prompt.
-
-### Running demo #3
-After LLM model has been loaded from SSD card, you will be presented with a prompt on the serial port.
-Enter a question then hit enter.
-There will be a response from LLM model.
-Hit Ctrl-C to break the response.
-
-# How to port ztachip to other FPGA,ASIC and SOC 
-
-Click [here](Documentation/PortProcedure.md) for procedure on how to port ztachip and its applications to other FPGA/ASIC and SOC.
-
-# Run ztachip in simulation
-
-First build example test program for simulation.
-The example test program is under SW/apps/test and SW/sim
-
-```
-export PATH=/opt/riscv/bin:$PATH
-cd ztachip
-cd SW/compiler
-make clean all
-cd ..
-make clean all -f makefile.kernels
-make clean all -f makefile.sim
-```
-
-Copy the generated image <ztachip>/SW/build/ztachip_sim.hex to folder where you run your simulator. 
-
-This image will be loaded to the simulated memory.
-
-Then compile all RTL codes below for simulation
-```
-HW/src
-HW/platform/simulation
-HW/simulation
-HW/riscv/sim
-```
-The top component of your simulation is HW/simulation/main.vhd
-
-Provide clock to main:clk
-
-main:led_out should blink everytime a test result is passed.
-
-
-# Contact
-
-This project is free to use. You can open an issue or a discussion on github.
-But for business consulting and support, please
- <a href="mailto:vuongdnguyen@hotmail.com?cc=&subject=Ztachip Support&body=Hi Vuong \n">contact us</a></p>
-Follow ztachip on [Twitter](https://twitter.com/ztachip)
-
+Original project: **https://github.com/ztachip/ztachip** — licensed under Apache-2.0.
