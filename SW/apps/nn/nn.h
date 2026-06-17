@@ -62,7 +62,7 @@ typedef enum {
 } NeuralNetTensorType;
 
 typedef enum {
-   NeuralNetActivationNone,
+   NeuralNetActivationNone = 0,
    NeuralNetActivationRelu,
    NeuralNetActivationRelu6,
    NeuralNetActivationRelu1,
@@ -75,9 +75,13 @@ typedef enum {
    NeuralNetOperatorConcatenation,
    NeuralNetOperatorLogistic,
    NeuralNetOperatorReshape,
+   NeuralNetOperatorPad,
    NeuralNetOperatorDetection,
    NeuralNetOperatorAdd,
    NeuralNetOperatorAvgPool2D,
+   NeuralNetOperatorMaxPool2D,
+   NeuralNetOperatorFC,
+   NeuralNetOperatorMean,
    NeuralNetOperatorUnknown,
    NeuralNetOperatorMax
 } NeuralNetOperator;
@@ -106,7 +110,12 @@ struct NeuralNetOperatorDef {
    std::vector<int> output;
    std::vector<std::vector<int>*> input_shape;
    std::vector<std::vector<int>*> output_shape;
+   std::vector<int32_t> output_multiplier_per_channel;
+   std::vector<double> output_scale_per_channel;
+   std::vector<int> output_shift_per_channel;
+   // assume input type will be same for all inputs
    std::vector<NeuralNetTensorType> input_type;
+   // assume output type will be same for all outputs
    std::vector<NeuralNetTensorType> output_type;
    union {
       struct {
@@ -124,10 +133,15 @@ struct NeuralNetOperatorDef {
          int32_t output_activation_min;
          int32_t output_activation_max;
          int32_t output_scale;
+         bool    per_tensor;
+         bool    per_channel;
          uint8_t *bias;
          uint8_t *filter;
          std::vector<int> *filter_shape;
          std::vector<int> *bias_shape;
+         int32_t fc_spatial_H;
+         int32_t fc_spatial_W;
+         int32_t fc_spatial_C;
       } conv;
       struct {
          size_t size;
@@ -190,6 +204,10 @@ struct NeuralNetOperatorDef {
          int32_t activation_max;
       } add;
       struct {
+         int32_t input_offset;
+         int32_t output_offset;
+         int32_t multiplier;
+         int32_t shift;
          int32_t stride_w;
          int32_t stride_h;
          int32_t filter_w;
@@ -198,8 +216,9 @@ struct NeuralNetOperatorDef {
          int32_t pad_h;
          int32_t activation_min;
          int32_t activation_max;
+         bool    keep_dims; // for mean
       } pool_avg;
-   } u; 
+   } u;
 };
 
 class NeuralNet;
@@ -235,6 +254,7 @@ public:
 public:
    // Some supporting functions to interpret results of inference...
    static ZtaStatus GetTop5(uint8_t *prediction,int predictionSize,int *top5);
+   static ZtaStatus GetTop5_INT(int8_t *prediction,int predictionSize,int *top5);
    ZtaStatus LabelLoad(const char *fname);
    const char *LabelGet(int _idx);
 public:
@@ -249,6 +269,7 @@ public:
    bool BufferInterleavePresent(int bufid);
    bool BufferIsInit(int bufid);
    void BufferFreeAll();
+   int GetBufferSize();
 private:
    ZtaStatus AssignInputTensor(bool firstTime);
    ZtaStatus AssignOutputTensors(bool firstTime);
@@ -256,7 +277,7 @@ public:
    std::vector<NeuralNetLayer *> m_operators;
 public:
    // Some utilities
-   inline float dequantize(uint8_t x,int32_t zero,float scale) { 
+   inline float dequantize(uint8_t x,int32_t zero,float scale) {
       return ((static_cast<float>(x) - zero) * scale);
    }
 private:

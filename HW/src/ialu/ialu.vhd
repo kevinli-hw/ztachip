@@ -98,6 +98,7 @@ shifter_i : barrel_shifter_a
    )
    PORT MAP (      
       direction_in=>shr,
+      rounding_in=>'0',
       data_in=>x1,
       distance_in=>x2(iregister_width_log_c-1 downto 0),
       data_out=>shift_y
@@ -110,6 +111,7 @@ logic_shifter_i : barrel_shifter_l
    )
    PORT MAP (      
       direction_in=>'1',
+      rounding_in=>'0',
       data_in=>x1,
       distance_in=>x2(iregister_width_log_c-1 downto 0),
       data_out=>logic_shift_y

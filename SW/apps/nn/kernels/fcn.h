@@ -24,9 +24,13 @@ extern "C" {
 
 extern void kernel_innerProduct_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
+   unsigned int _mult,
+   unsigned int _shift,
    unsigned int _bot,
    unsigned int _top,
    int _topcnt,
@@ -58,6 +62,8 @@ extern void kernel_logistic_exe(
 
 extern void kernel_Pooling_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_avg_pool,
    unsigned int _bot,
    unsigned int _top,
    int _ksz,
@@ -67,7 +73,9 @@ extern void kernel_Pooling_exe(
    int _botcnt,
    int _botdim,
    unsigned int _stream,
-   int _output_shift
+   int _input_offset,
+   int _output_shift,
+   int _pad
 );
 
 #define IP_CHUNK_SIZE  8

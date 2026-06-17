@@ -58,7 +58,6 @@ ENTITY falu IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
-        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -121,15 +120,13 @@ SIGNAL output_ena_delay:std_logic;
 SIGNAL output_ena_r:std_logic;
 SIGNAL output_precision_delay:unsigned(2 downto 0);
 SIGNAL output_floor_delay:std_logic;
-SIGNAL output_int_delay:std_logic;
 SIGNAL output_abs_delay:std_logic;
 
 SIGNAL output_precision:unsigned(2 downto 0);
 SIGNAL output_floor:std_logic;
-SIGNAL output_int:std_logic;
 SIGNAL output_abs:std_logic;
 SIGNAL output:fp32_t;
-SIGNAL output_fp2int16:std_logic_vector(15 downto 0);
+SIGNAL output_fp2int:std_logic_vector(31 downto 0);
 SIGNAL output_fp_floor:fp32_t;
 
 type RECIPROCAL_LUT_TYPE is array (0 to 7) of STD_LOGIC_VECTOR(5 downto 0);
@@ -257,18 +254,6 @@ delay_A_floor_i:delay
         enable_in=>'1'
     );
 
-delay_A_int_i:delay
-    generic map(
-        DEPTH=>LATENCY+1
-    )
-    port map(
-        clock_in=>clock_in,
-        reset_in=>reset_in,
-        in_in=>A_int,
-        out_out=>output_int_delay,
-        enable_in=>'1'
-    );
-    
 delay_A_abs_i:delay
     generic map(
         DEPTH=>LATENCY+1
@@ -513,10 +498,9 @@ stage_3: FP32_ADDSUB
 
 output_precision_out <= output_precision;
 
-fp2int12_i: fp2int
+fp2int_i: FP2INT
    generic map
    (
-      WIDTH=>16,
       LATENCY=>OUTPUT_LATENCY
    )
    port map 
@@ -524,7 +508,7 @@ fp2int12_i: fp2int
       reset_in=>reset_in,
       clock_in=>clock_in,
       x_in=>output_r,
-      y_out=>output_fp2int16
+      y_out=>output_fp2int
    );
 
 fp_floor_i: fp_floor
@@ -568,11 +552,10 @@ begin
     end if;
 end process;
 
-process(output_precision,output_floor,output_int,output_fp2int16,output_fp_floor,output_abs,output)
+process(output_precision,output_floor,output_fp2int,output_fp_floor,output_abs,output)
 begin
-    if(output_int='1') then
-        output_out(31 downto 16) <= output_fp2int16;
-        output_out(15 downto 0) <= (others=>'0');
+    if(output_precision=1) then
+        output_out <= output_fp2int;
     elsif(output_floor='1') then
         output_out <= output_fp_floor;
     else
@@ -652,18 +635,6 @@ output_delay5_i:delay
         reset_in=>reset_in,
         in_in=>output_abs_delay,
         out_out=>output_abs,
-        enable_in=>'1'
-    );
-
-output_delay6_i:delay
-    generic map(
-        DEPTH=>OUTPUT_LATENCY
-    )
-    port map(
-        clock_in=>clock_in,
-        reset_in=>reset_in,
-        in_in=>output_int_delay,
-        out_out=>output_int,
         enable_in=>'1'
     );
 

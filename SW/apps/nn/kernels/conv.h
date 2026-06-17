@@ -24,6 +24,8 @@ extern "C" {
 
 extern void kernel_convolution_depthwise_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -37,6 +39,8 @@ extern void kernel_convolution_depthwise_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
+   unsigned int _activation_shift,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -50,6 +54,8 @@ extern void kernel_convolution_depthwise_exe(
 
 extern void kernel_convolution_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -63,6 +69,8 @@ extern void kernel_convolution_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
+   unsigned int _activation_shift,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -76,6 +84,7 @@ extern void kernel_convolution_exe(
 
 extern void kernel_add_exe(
    unsigned int _req_id,
+   int         _is_int,
    int _size,
    unsigned int _input_0,
    unsigned int _input_1,
@@ -130,7 +139,8 @@ extern void kernel_add_exe(
 // Convolution 1x1
 //#define CONV_1X1_BOTSZ 512
 
-#define CONV_1X1_BOTSZ 840
+//#define CONV_1X1_BOTSZ 840
+#define CONV_1X1_BOTSZ 800
 
 #define CONV_1X1_Y_DIM 8
 

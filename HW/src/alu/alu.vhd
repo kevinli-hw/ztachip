@@ -51,7 +51,7 @@ END alu;
 
 ARCHITECTURE behavior OF alu IS
 
-constant FP12_INT_WIDTH:integer:=24;
+constant FP12_INT_WIDTH:integer:=20;
 
 SIGNAL add_sub:STD_LOGIC;
 SIGNAL add_sub_r:STD_LOGIC;
@@ -63,6 +63,15 @@ SIGNAL zero:STD_LOGIC;
 SIGNAL y_r:STD_LOGIC_VECTOR(accumulator_width_c-1 DOWNTO 0);
 SIGNAL y2_r:STD_LOGIC;
 SIGNAL y3_r:STD_LOGIC_VECTOR(register_width_c-1 DOWNTO 0);
+
+-- QUANT MUL SIGNAL
+SIGNAL y_quant_mul:STD_LOGIC_VECTOR (2*accumulator_width_c-1 DOWNTO 0);
+SIGNAL y_quant_nudged:STD_LOGIC_VECTOR (2*accumulator_width_c-1 DOWNTO 0);
+SIGNAL y_quant_shift:STD_LOGIC_VECTOR (2*accumulator_width_c-1 DOWNTO 0);
+constant quant_mul_nudge_pos_c : signed(2*accumulator_width_c-1 downto 0) :=
+   to_signed(2**(quant_mul_shift_distance-1), 2*accumulator_width_c);
+constant quant_mul_nudge_neg_c : signed(2*accumulator_width_c-1 downto 0) :=
+   to_signed(1 - 2**(quant_mul_shift_distance-1), 2*accumulator_width_c);
 
 -- XREG
 
@@ -87,7 +96,8 @@ signal x_scalar_r:STD_LOGIC_VECTOR (register_width_c-1 DOWNTO 0);
 
 -- SHIFT operation
 
-constant shift_width_depth_c:integer:=2;
+--constant shift_width_depth_c:integer:=2;
+constant shift_width_depth_c:integer:=5;
 constant shift_width_c:integer:=accumulator_width_c;
 constant accumulator_extra_width_c:integer:=accumulator_width_c-2*register_width_c;
 
@@ -102,7 +112,19 @@ signal shift_direction_r:std_logic; -- 1 for right shift; 0 for left shift
 signal shift_direction_rr:std_logic; -- 1 for right shift; 0 for left shift
 signal shift_direction_rrr:std_logic; -- 1 for right shift; 0 for left shift
 signal shift_direction_rrrr:std_logic; -- 1 for right shift; 0 for left shift
+-- rounding
+signal shift_rounding_r:std_logic;
+signal shift_rounding_rr:std_logic;
 signal add_x1:std_logic_vector(accumulator_width_c-1 downto 0);
+
+signal shared_mul_a:STD_LOGIC_VECTOR(accumulator_width_c-1 downto 0);
+signal shared_mul_b:STD_LOGIC_VECTOR(accumulator_width_c-1 downto 0);
+signal shared_mul_out:STD_LOGIC_VECTOR(2*accumulator_width_c-1 downto 0);
+signal shared_mul_a_r:STD_LOGIC_VECTOR(accumulator_width_c-1 downto 0);
+signal shared_mul_b_r:STD_LOGIC_VECTOR(accumulator_width_c-1 downto 0);
+signal add_sub_rr:STD_LOGIC;
+signal shift_rounding_rrr:std_logic;
+signal fp12_value_r:fp12_t;
 
 signal fp12_value:fp12_t;
 
@@ -163,7 +185,7 @@ begin
       y3_r <= (others=>'0');
    else
    if clock_in'event and clock_in='1' then
-   case mu_opcode_rrrr is
+   case mu_opcode_rrrrr is
       when mu_opcode_cmp_lt_c =>
          y2_r <= (negative and (not zero));
       when mu_opcode_cmp_le_c =>
@@ -190,12 +212,12 @@ begin
       y_r <= y_shift_r;
    end if;
 
-   if(mu_opcode_rrrr=mu_opcode_conv_c) then
-      y3_r(fp12_value'length-1 downto 0) <= fp12_value;
-   elsif(mu_opcode_rrrr=mu_opcode_lsb4_c) then
+   if(mu_opcode_rrrrr=mu_opcode_conv_c) then
+      y3_r(fp12_value_r'length-1 downto 0) <= fp12_value_r;
+   elsif(mu_opcode_rrrrr=mu_opcode_lsb4_c) then
       y3_r(3 downto 0) <= y_shift_r(3 downto 0);
       y3_r(y3_r'length-1 downto 4) <= (others=>y_shift_r(3));
-   elsif(mu_opcode_rrrr=mu_opcode_msb4_c) then
+   elsif(mu_opcode_rrrrr=mu_opcode_msb4_c) then
       y3_r(3 downto 0) <= y_shift_r(7 downto 4);
       y3_r(y3_r'length-1 downto 4) <= (others=>y_shift_r(7));
    else
@@ -206,20 +228,31 @@ begin
    end if;
 end process;
 
-mul_i:multiplier
+-- Mux inputs: quant_mul uses (sign_extend(x1_r), xreg_r), all others use (sign_extend(x2_r), sign_extend(mul_x2_r))
+shared_mul_a <= std_logic_vector(resize(signed(x1_r), accumulator_width_c))
+                when mu_opcode_r = mu_opcode_quant_mul_c
+                else std_logic_vector(resize(signed(x2_r), accumulator_width_c));
+shared_mul_b <= xreg_r
+                when mu_opcode_r = mu_opcode_quant_mul_c
+                else std_logic_vector(resize(signed(mul_x2_r), accumulator_width_c));
+
+shared_mul_i:multiplier
 	generic map
 	(
-		DATA_WIDTH=>register_width_c,
+		DATA_WIDTH=>accumulator_width_c,
         REGISTER_OUTPUT=>TRUE
 	)
-	port map 
+	port map
 	(
 		clock_in=>clock_in,
         reset_in=>reset_in,
-        x_in=>x2_r,
-        y_in=>mul_x2_r,   
-        z_out=>y_mul
+        x_in=>shared_mul_a_r,
+        y_in=>shared_mul_b_r,
+        z_out=>shared_mul_out
 	);
+
+y_mul <= shared_mul_out(2*register_width_c-1 downto 0);
+y_quant_mul <= shared_mul_out;
 
 adder_i : adder
    generic map
@@ -228,9 +261,9 @@ adder_i : adder
    )
    port map 
    (
-      x_in=>xreg_rr,
+      x_in=>xreg_rrr,
       y_in=>add_x1,
-      add_sub_in=>add_sub_r,
+      add_sub_in=>add_sub_rr,
       z_out=>y_add
    );
 
@@ -243,10 +276,11 @@ shifter_i : barrel_shifter_a
       DIST_WIDTH=>shift_width_depth_c,
       DATA_WIDTH=>shift_width_c
    )
-   PORT MAP (      
-      direction_in=>shift_direction_rr,
+   PORT MAP (
+      direction_in=>shift_direction_rrr,
+      rounding_in=>shift_rounding_rrr,
       data_in=>y_add_r,
-      distance_in=>shift_distance_rr,
+      distance_in=>shift_distance_rrr,
       data_out=>y_shift
    );
 
@@ -271,7 +305,12 @@ GEN2: IF(fpu_enabled_c = FALSE) GENERATE
 fp12_value <= (others=>'0');
 END GENERATE GEN2;
 
-add_x1 <= y_mul;
+-- add quant mul logic (SaturatingRoundingDoublingHighMul style rounding)
+y_quant_nudged <= std_logic_vector(signed(y_quant_mul) + quant_mul_nudge_pos_c)
+                  when y_quant_mul(2*accumulator_width_c-1) = '0'
+                  else std_logic_vector(signed(y_quant_mul) + quant_mul_nudge_neg_c);
+y_quant_shift <= std_logic_vector(shift_right(signed(y_quant_nudged), quant_mul_shift_distance));
+add_x1 <= y_mul when mu_opcode_rrr /= mu_opcode_quant_mul_c else y_quant_shift(accumulator_width_c-1 downto 0);
 
 process(clock_in,reset_in)
 begin
@@ -288,7 +327,9 @@ begin
          mu_opcode_in=mu_opcode_shla_c or
          mu_opcode_in=mu_opcode_shra_c or 
          mu_opcode_in=mu_opcode_lsb4_c or
-         mu_opcode_in=mu_opcode_msb4_c then
+         mu_opcode_in=mu_opcode_msb4_c or
+         mu_opcode_in=mu_opcode_shla_v_c or 
+         mu_opcode_in=mu_opcode_shra_v_c then
          mul_x2_r <= (others=>'0');
       else
          mul_x2_r <= std_logic_vector(to_unsigned(1,register_width_c));
@@ -309,6 +350,9 @@ if reset_in = '0' then
    shift_direction_rr <= '0';
    shift_direction_rrr <= '0';
    shift_direction_rrrr <= '0';
+   shift_rounding_r <= '0';
+   shift_rounding_rr <= '0';
+   shift_rounding_rrr <= '0';
 else
    if clock_in'event and clock_in='1' then
    if mu_opcode_r=mu_opcode_shra_c or mu_opcode_r=mu_opcode_shla_c or mu_opcode_r=mu_opcode_shr_c or mu_opcode_r=mu_opcode_shl_c then
@@ -320,10 +364,24 @@ else
       else 
          shift_distance_r <= x_scalar_r(shift_width_depth_c-1 downto 0);
       end if;
+   elsif mu_opcode_r=mu_opcode_shla_v_c or mu_opcode_r=mu_opcode_shra_v_c then 
+      -- Shift distance is coming from vector parameter
+      if x1_r(x1_r'length-1)='1' then
+         shift_distance_r <= (others=>'0');
+      elsif unsigned(x1_r(x1_r'length-1 downto shift_width_depth_c)) /= to_unsigned(0, x1_r'length-shift_width_depth_c) then
+         shift_distance_r <= (others=>'1');
+      else
+         shift_distance_r <= x1_r(shift_width_depth_c-1 downto 0);
+      end if;
    else 
       shift_distance_r <= (others=>'0');
    end if;
-   if mu_opcode_r=mu_opcode_shla_c or mu_opcode_r=mu_opcode_shl_c then 
+   if mu_opcode_r=mu_opcode_shla_v_c or mu_opcode_r=mu_opcode_shra_v_c then
+      shift_rounding_r <= '1';
+   else
+      shift_rounding_r <= '0';
+   end if;
+   if mu_opcode_r=mu_opcode_shla_c or mu_opcode_r=mu_opcode_shl_c or mu_opcode_r=mu_opcode_shla_v_c then 
       shift_direction_r <= '0';
    else
       shift_direction_r <= '1';
@@ -331,6 +389,8 @@ else
    shift_direction_rr <= shift_direction_r;
    shift_direction_rrr <= shift_direction_rr;
    shift_direction_rrrr <= shift_direction_rrr;
+   shift_rounding_rr <= shift_rounding_r;
+   shift_rounding_rrr <= shift_rounding_rr;
    shift_distance_rr <= shift_distance_r;
    shift_distance_rrr <= shift_distance_rr;
    shift_distance_rrrr <= shift_distance_rrr;
@@ -363,6 +423,10 @@ begin
         y_add_r <= (others=>'0');
 
         y_shift_r <= (others=>'0');
+        shared_mul_a_r <= (others=>'0');
+        shared_mul_b_r <= (others=>'0');
+        add_sub_rr <= '0';
+        fp12_value_r <= (others=>'0');
     else
         if clock_in'event and clock_in='1' then
 
@@ -379,6 +443,10 @@ begin
             xreg_r <= xreg_in;                     
             y_add_r <= y_add;
             y_shift_r <= y_shift;
+            shared_mul_a_r <= shared_mul_a;
+            shared_mul_b_r <= shared_mul_b;
+            add_sub_rr <= add_sub_r;
+            fp12_value_r <= fp12_value;
             xreg_rrrr <= xreg_rrr;
             xreg_rrr <= xreg_rr;
 
@@ -386,9 +454,9 @@ begin
                xreg_rr <= xreg_r;
             else
                case mu_opcode_r is
-                  when mu_opcode_shla_c|mu_opcode_shra_c =>
+                  when mu_opcode_shla_c|mu_opcode_shra_c|mu_opcode_shla_v_c|mu_opcode_shra_v_c=>
                      xreg_rr <= std_logic_vector(resize(signed(xreg_r),shift_width_c));
-                  when mu_opcode_mul_c|mu_opcode_shl_c|mu_opcode_shr_c =>
+                  when mu_opcode_mul_c|mu_opcode_quant_mul_c|mu_opcode_shl_c|mu_opcode_shr_c =>
                      xreg_rr <= (others=>'0');
                   when mu_opcode_assign_raw_c|mu_opcode_assign_c|mu_opcode_lsb4_c|mu_opcode_msb4_c=>
                      xreg_rr(register_width_c-1 downto 0) <= x1_r;

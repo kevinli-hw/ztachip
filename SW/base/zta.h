@@ -47,7 +47,8 @@
 
 // Max shift distance
 
-#define MAX_SHIFT_DISTANCE  3
+//#define MAX_SHIFT_DISTANCE  3  //v0
+#define MAX_SHIFT_DISTANCE  31  //v1
 
 // Number of threads
 
@@ -157,7 +158,7 @@
 
 #define MCORE_INSTRUCTION_SIZE  (1<<MCORE_INSTRUCTION_DEPTH);
 
-// Shared mode: 
+// Shared mode:
 // 0=2 register per thread assigned for shared space
 // 1=4 registers per thread assigned for shared space
 // 2=8 registers per thread assigned for shared space
@@ -232,7 +233,7 @@
 
 // DP address bus width. Wide enough to address largest allowed tensors
 
-#define DP_ADDR_WIDTH  MAX_TENSOR_LOG2_SIZE 
+#define DP_ADDR_WIDTH  MAX_TENSOR_LOG2_SIZE
 
 // TENSOR core instructions
 
@@ -416,7 +417,7 @@
 
 #define DP_OPCODE_PRINT  7
 
-#define DP_OPCODE_FPU_EXE 5 
+#define DP_OPCODE_FPU_EXE 5
 
 // Condition associated with REG_DP_RUN command
 
@@ -500,7 +501,7 @@
 
 #define FPU_SET_W_FP32   16
 
-#define FPU_SET_W_INT16  32
+#define FPU_SET_W_INT8   32
 
 #define FPU_SET_W_ZFP16  48
 

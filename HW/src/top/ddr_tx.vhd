@@ -268,7 +268,7 @@ end process;
 process(write_vector_in,write_addr_in)
 variable ddr_addr_v:std_logic_vector(ddr_bus_width_c-1 downto 0);
    begin
-   ddr_addr_v(ddr_bus_width_c-1 downto dp_full_addr_width_c+data_byte_width_depth_c) := (others=>'0');
+   ddr_addr_v(ddr_bus_width_c-1 downto dp_full_addr_width_c+data_byte_width_depth_c-1) := (others=>'0');
    ddr_addr_v(dp_full_addr_width_c+data_byte_width_depth_c-1 downto ddr_vector_depth_c+data_byte_width_depth_c) := write_addr_in(dp_full_addr_width_c-1 downto ddr_vector_depth_c);
    ddr_addr_v(ddr_vector_depth_c+data_byte_width_depth_c-1 downto 0) := (others=>'0');
    wr_ddr_addr <= std_logic_vector(unsigned(ddr_addr_v));

@@ -1539,7 +1539,7 @@ gpio_inst:gpio
 
 UART_INST:UART 
    generic map(
-      BAUD_RATE=>115200
+      BAUD_RATE=>4000000
       )
    port map(
       clock_in=>clk_main,

@@ -16,7 +16,7 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
-#include <stdbool.h>
+#include <stdint.h>
 #include "../../../base/util.h"
 #include "../../../base/ztalib.h"
 #include "nn.h"
@@ -35,6 +35,8 @@ typedef struct {
    uint32_t bot;
    uint32_t top;
    uint32_t top_interleave;
+   uint32_t activation_multiplier;
+   uint32_t activation_shift;
    int ksz;
    int topcnt;
    int topdim;
@@ -53,6 +55,8 @@ typedef struct {
    int in_interleave;
    int out_interleave;
    uint32_t stream;
+   int is_int;
+   int is_per_tensor;
 } RequestConv;
 
 // Perform 3x3 convolution
@@ -80,10 +84,15 @@ static void convolution_3x3(void *_p,int pid) {
    int dysz,dycnt;
    int dx;
    int kfunc;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt=req->is_int?INT8:UINT8;
+   //int botfmt=UINT8;
+   int botfmt=req->is_int?INT8:UINT8;
    int biasfmt=INT16;
-   int weightfmt=UINT8;
+   int multiplierfmt=INT16;
+   int shiftfmt=INT16;
+   //int weightfmt=UINT8;
+   int weightfmt=req->is_int?INT8:UINT8;
       
    conv_dx=req->conv_dx;
    if(conv_dx <= (NUM_THREAD_PER_CORE/2))
@@ -114,7 +123,16 @@ static void convolution_3x3(void *_p,int pid) {
    bot=req->bot;
    coef=req->coef;
 
-   kfunc=$convolution::exe3x3;
+   //kfunc=$convolution::exe3x3;
+   if(req->ksz == 7)
+      kfunc=$convolution::exe7x7;
+   else if(req->ksz == 5)
+      kfunc=$convolution::exe5x5;
+   else if(req->ksz == 1)
+      kfunc=$convolution::exe1x1;
+   else
+      kfunc=$convolution::exe3x3;
+      
    if(x > CONV_SMALL_BOT_DX) ztaAbort(0);
    if(y > CONV_SMALL_BOT_DY) ztaAbort(0);
    if(req->group > 2) ztaAbort(0);
@@ -142,22 +160,30 @@ static void convolution_3x3(void *_p,int pid) {
    for(i=from;i < to;i += step) {
       > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution::biasHi[:] <= DTYPE(biasfmt)MEM(req->biasHi,req->topcnt)[i:i+step-1];
       > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution::biasLo[:] <= DTYPE(biasfmt)MEM(req->biasLo,req->topcnt)[i:i+step-1];
+      if (req->is_per_tensor == 0) //per_channel
+      {
+        > DTYPE(multiplierfmt)PCORE(group,groupsz)[:][*].convolution::activation_multiplier[:] <= DTYPE(multiplierfmt)MEM(req->activation_multiplier,req->topcnt)[i:i+step-1];
+        > DTYPE(shiftfmt)PCORE(group,groupsz)[:][*].convolution::activation_shift[:] <= DTYPE(shiftfmt)MEM(req->activation_shift,req->topcnt)[i:i+step-1];
+      }
       rowi=((i>>VECTOR_DEPTH)*kz)*VECTOR_WIDTH;
       ii=(i/topcnt2)*botcnt2;
       > $coef_ddr := DTYPE(weightfmt)MEM(coef,botcnt2,topcnt3)[$][rowi:rowi+gkz-1];
       for(r=0,r2=-req->pad;r < req->topdim;r += conv_dy,r2 += stride_dy) {
          for(c=0,c2=-req->pad;c < req->topdim;c += conv_dx,c2+=stride_dx) {
-            > $bot_ddr := PAD(-req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
+            > $bot_ddr := PAD(req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[$][r2:r2+y-1][c2:c2+x-1];
             > convolution::start.count <= INT16(dycnt);
             > EXE_LOCKSTEP(convolution::start,np);
+            dx=req->topdim-c;
+            if(dx > conv_dx)
+               dx=conv_dx;
             for(jj=0;jj < botcnt2;jj++) {
                ztaTaskYield(); 
                j=jj+ii;
                > $bot_pcore <= $bot_ddr[j];
                > $coef_pcore <= $coef_ddr[jj];
-               dx=req->topdim-c;
-               if(dx > conv_dx)
-                  dx=conv_dx;
+               //dx=req->topdim-c;
+               //if(dx > conv_dx)
+               //   dx=conv_dx;
                for(kk=0,offset=0,r4=r;kk < dycnt;kk++,offset+=dysz,r4+=conv_dy2) {
                   if(r4 >= req->topdim)
                      break;
@@ -167,8 +193,13 @@ static void convolution_3x3(void *_p,int pid) {
                }
             } 
             for(jj=0;jj < dycnt;jj++) {
-            > convolution::activate.idx <= INT16(jj);
-            > EXE_LOCKSTEP(convolution::activate,np);
+              > convolution::activate.idx <= INT16(jj);
+              if(req->is_per_tensor){
+                > EXE_LOCKSTEP(convolution::activate,np);
+              }
+              else{
+                > EXE_LOCKSTEP(convolution::activate_per_channel,np,dx);
+              }
             }
             ztaTaskYield();
             if(req->out_interleave==kTensorFormatInterleaved || req->out_interleave==kTensorFormatFlatAndInterleaved) {
@@ -216,10 +247,15 @@ static void convolution_1x1(void *_p,int pid) {
    int conv_dx;
    int dysz,dycnt,dycntLast,dzcnt,dycnt2,xy2,xy3,xy4;
    int remain,delta;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt= req->is_int ? INT8:UINT8;
+   //int botfmt=UINT8;
+   int botfmt= req->is_int ? INT8:UINT8;
    int biasfmt=INT16;	
-   int weightfmt=UINT8;
+   int multiplierfmt=INT16;
+   int shiftfmt=INT16;
+   //int weightfmt=UINT8;
+   int weightfmt= req->is_int ? INT8:UINT8;
    uint32_t f,f_activate;
    int mindycnt,batchcnt;
    int cnt;
@@ -321,8 +357,12 @@ static void convolution_1x1(void *_p,int pid) {
       }
       from+=topoffset;
       to+=topoffset;
-
-      f_activate=ztaBuildKernelFunc($convolution1x1::activate,np,conv_dx);
+      
+      if(req->is_per_tensor){
+        f_activate=ztaBuildKernelFunc($convolution1x1::activate,np,conv_dx);
+      }else{
+        f_activate=ztaBuildKernelFunc($convolution1x1::activate_per_channel,np,conv_dx);
+      }
 
       > $coef_pcore := REMAP(2) DTYPE(weightfmt)FOR(I=0:dzcnt-1) PCORE(group,groupsz)[:][*].convolution1x1::coef[I][:];
 
@@ -330,6 +370,11 @@ static void convolution_1x1(void *_p,int pid) {
       {
          > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution1x1::biasHi[:] <= DTYPE(biasfmt)MEM(req->biasHi,req->topcnt)[i:i+step-1];
          > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution1x1::biasLo[:] <= DTYPE(biasfmt)MEM(req->biasLo,req->topcnt)[i:i+step-1];
+         if(req->is_per_tensor == 0) //per_channel
+         {
+            > DTYPE(multiplierfmt)PCORE(group,groupsz)[:][*].convolution1x1::activation_multiplier[:] <= DTYPE(multiplierfmt)MEM(req->activation_multiplier,req->topcnt)[i:i+step-1];
+            > DTYPE(shiftfmt)PCORE(group,groupsz)[:][*].convolution1x1::activation_shift[:] <= DTYPE(shiftfmt)MEM(req->activation_shift,req->topcnt)[i:i+step-1];
+         }
 
          rowi=((i>>VECTOR_DEPTH)*kz)*VECTOR_WIDTH;
          > $coef_ddr := DTYPE(weightfmt)MEM(coef,botcnt2/dzcnt,dzcnt,topcnt3)[$][:][rowi:rowi+gkz-1];
@@ -449,10 +494,15 @@ static void convolution_depthwise(void *_p,int pid) {
    int conv_dx,conv_dy,conv_dy2,conv_dx2;
    int dysz,dycnt,dxcnt;
    int dx;
-   int topfmt=UINT8;
-   int botfmt=UINT8;
+   //int topfmt=UINT8;
+   int topfmt= req->is_int ? INT8:UINT8;
+   //int botfmt=UINT8;
+   int botfmt= req->is_int ? INT8:UINT8;
    int biasfmt=INT16;
-   int weightfmt=UINT8;
+   int multiplierfmt=INT16;
+   int shiftfmt=INT16;
+   //int weightfmt=UINT8;
+   int weightfmt= req->is_int ? INT8:UINT8;
    int f,loop;
    int count,minCount,interation,minInteration;
    int batchcnt,maxgroupsz,mingroup;
@@ -561,8 +611,13 @@ static void convolution_depthwise(void *_p,int pid) {
       }
       from+=topoffset;
       to+=topoffset;
-
-      f=ztaBuildKernelFunc($convolution_depthwise::exe3x3,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      
+      if(req->is_per_tensor){
+        f=ztaBuildKernelFunc($convolution_depthwise::exe3x3,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      }
+      else{
+        f=ztaBuildKernelFunc($convolution_depthwise::exe3x3_per_channel,np,(dxcnt==1)?conv_dx:NUM_THREAD_PER_CORE/2+conv_dx);
+      }
 
       > $coef_pcore := REMAP(2) DTYPE(weightfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::coef[0:kz-1][:];
 
@@ -576,6 +631,11 @@ static void convolution_depthwise(void *_p,int pid) {
       for(i=from;i < to;i += step) {
          > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::biasHi[:] <= DTYPE(biasfmt)MEM(req->biasHi,req->topcnt)[i:i+step-1];
          > DTYPE(biasfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::biasLo[:] <= DTYPE(biasfmt)MEM(req->biasLo,req->topcnt)[i:i+step-1];
+         if (req->is_per_tensor == 0) //per_channel
+         {
+            > DTYPE(multiplierfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::activation_multiplier[:] <= DTYPE(multiplierfmt)MEM(req->activation_multiplier,req->topcnt)[i:i+step-1];
+            > DTYPE(shiftfmt)PCORE(group,groupsz)[:][*].convolution_depthwise::activation_shift[:] <= DTYPE(shiftfmt)MEM(req->activation_shift,req->topcnt)[i:i+step-1];
+         }
 
          rowi=((i>>VECTOR_DEPTH)*kz)*VECTOR_WIDTH;
 
@@ -586,9 +646,11 @@ static void convolution_depthwise(void *_p,int pid) {
             for(c=0,c2=-req->pad;c < req->topdim;c += conv_dx,c2+=stride_dx) {
                >VAR $bot_ddr;
                if(req->in_interleave) {
-                  > $bot_pcore <= PAD(0) DTYPE(botfmt)MEM(bot,botdim,botdim,botcnt)[r2:r2+y-1][c2:c2+x-1][i:i+group*VECTOR_WIDTH-1];
+                  //> $bot_pcore <= PAD(0) DTYPE(botfmt)MEM(bot,botdim,botdim,botcnt)[r2:r2+y-1][c2:c2+x-1][i:i+group*VECTOR_WIDTH-1];
+                  > $bot_pcore <= PAD(req->input_offset) DTYPE(botfmt)MEM(bot,botdim,botdim,botcnt)[r2:r2+y-1][c2:c2+x-1][i:i+group*VECTOR_WIDTH-1];
                } else {
-                  > $bot_pcore <= PAD(0) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[i:i+group*VECTOR_WIDTH-1][r2:r2+y-1][c2:c2+x-1];		
+                  //> $bot_pcore <= PAD(0) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[i:i+group*VECTOR_WIDTH-1][r2:r2+y-1][c2:c2+x-1];		
+                  > $bot_pcore <= PAD(req->input_offset) DTYPE(botfmt)MEM(bot,botcnt,botdim,botdim)[i:i+group*VECTOR_WIDTH-1][r2:r2+y-1][c2:c2+x-1];		
                }
                dx=req->topdim-c;
                if(dx > conv_dx)
@@ -616,6 +678,7 @@ static void convolution_depthwise(void *_p,int pid) {
 
 typedef struct {
    int size;
+   int is_int;
    uint32_t input[2];
    uint32_t output;
    uint32_t stream;
@@ -627,7 +690,7 @@ static void do_add_process(void *_p,int pid)
 {
    RequestAdd *req=(RequestAdd *)_p;
    int i,np,step,step2,from,to;
-   int fmt=UINT8;
+   int fmt=req->is_int? INT8:UINT8;
    np=NUM_PCORE;
 
    step=NUM_PCORE*NUM_THREAD_PER_CORE*VECTOR_WIDTH;
@@ -652,6 +715,7 @@ static void do_add_process(void *_p,int pid)
 
 void kernel_add_exe(
    unsigned int _req_id,
+   int         _is_int,
    int _size,
    unsigned int _input_0,
    unsigned int _input_1,
@@ -665,6 +729,7 @@ void kernel_add_exe(
    ztaInitStream(_stream);
    
    req.size=_size;
+   req.is_int = _is_int;
    req.input[0]=_input_0;
    req.input[1]=_input_1;
    req.output=_output;
@@ -679,6 +744,8 @@ void kernel_add_exe(
 
 void kernel_convolution_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -692,6 +759,8 @@ void kernel_convolution_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
+   unsigned int _activation_shift,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -710,6 +779,8 @@ void kernel_convolution_exe(
    ztaInitStream(_stream);
    
    req.coef=_coef;
+   req.is_int=_is_int;
+   req.is_per_tensor=_is_per_tensor;
    req.biasHi=_biasHi;
    req.biasLo=_biasLo;
    req.bot=_bot;
@@ -722,6 +793,8 @@ void kernel_convolution_exe(
    req.botdim=_botdim;
    req.input_offset=_input_offset;
    req.activation_scale=_activation_scale;
+   req.activation_multiplier=_activation_multiplier;
+   req.activation_shift=_activation_shift;
    req.stream=_stream;
    req.group=_group;
    req.stride=_stride;
@@ -732,7 +805,7 @@ void kernel_convolution_exe(
    req.in_interleave=_in_interleave;
    req.out_interleave=_out_interleave;
 
-   if(req.ksz==1)
+   if(req.ksz==1 && req.stride==1)
    {
       ztaDualHartExecute(convolution_1x1,&req);
    }
@@ -748,6 +821,8 @@ void kernel_convolution_exe(
 
 void kernel_convolution_depthwise_exe(
    unsigned int _req_id,
+   int         _is_int,
+   int         _is_per_tensor,
    unsigned int _coef,
    unsigned int _biasHi,
    unsigned int _biasLo,
@@ -761,6 +836,8 @@ void kernel_convolution_depthwise_exe(
    int _botdim,
    int _input_offset,
    int _activation_scale,
+   unsigned int _activation_multiplier,
+   unsigned int _activation_shift,
    unsigned int _stream,
    int _group,
    int _stride,
@@ -779,6 +856,8 @@ void kernel_convolution_depthwise_exe(
    ztaInitStream(_stream);
    
    req.coef=_coef;
+   req.is_int=_is_int;
+   req.is_per_tensor=_is_per_tensor;
    req.biasHi=_biasHi;
    req.biasLo=_biasLo;
    req.bot=_bot;
@@ -791,6 +870,8 @@ void kernel_convolution_depthwise_exe(
    req.botdim=_botdim;
    req.input_offset=_input_offset;
    req.activation_scale=_activation_scale;
+   req.activation_multiplier=_activation_multiplier;
+   req.activation_shift=_activation_shift;
    req.stream=_stream;
    req.group=_group;
    req.stride=_stride;

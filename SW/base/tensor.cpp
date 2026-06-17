@@ -21,6 +21,7 @@
 #include <vector>
 #include <stdarg.h>
 #include <malloc.h>
+#include <math.h>
 #include "types.h"
 #include "ztalib.h"
 #include "util.h"
@@ -86,7 +87,20 @@ ZtaStatus TENSOR::Clone(TENSOR *other) {
    return Create(other->GetDataType(),other->GetFormat(),other->GetObjType(),other->m_dim);
 }
 
-ZtaStatus TENSOR::CreateWithBitmap(const char *bmpFile,TensorFormat fmt)
+int8_t TENSOR::getQuantizedInput(uint8_t data)
+{
+   const float scale = 0.007843137718737125f;
+   const int zero_point = -1;
+   float data_f = ((float)data) / 127.5f - 1.0f;
+   int data_q = (int)roundf(data_f / scale) + zero_point;
+   if (data_q > 127)
+       data_q = 127;
+   else if (data_q < -128)
+       data_q = -128;
+   return (int8_t)data_q;
+}
+
+ZtaStatus TENSOR::CreateWithBitmap(const char *bmpFile,TensorFormat fmt, TensorDataType dataType)
 {
    uint8_t *pict;
    int bmp_w,bmp_h;
@@ -94,7 +108,6 @@ ZtaStatus TENSOR::CreateWithBitmap(const char *bmpFile,TensorFormat fmt)
    int r,c;
    int w,h;
    int dx,dy;
-   uint8_t *output;
 
    pict = bmpRead(bmpFile,&bmp_h,&bmp_w);
    if(!pict) {
@@ -102,32 +115,69 @@ ZtaStatus TENSOR::CreateWithBitmap(const char *bmpFile,TensorFormat fmt)
    }
    if(fmt==TensorFormatSplit) {
       std::vector<int> dim={3,bmp_h,bmp_w};
-      Create(TensorDataTypeUint8,TensorFormatSplit,TensorObjTypeRGB,dim);
+      //Create(TensorDataTypeUint8,TensorFormatSplit,TensorObjTypeRGB,dim);
+      Create(dataType,TensorFormatSplit,TensorObjTypeRGB,dim);
    } else {
       std::vector<int> dim={bmp_h,3*bmp_w};
-      Create(TensorDataTypeUint8,TensorFormatSplit,TensorObjTypeRGB,dim);
+      //Create(TensorDataTypeUint8,TensorFormatSplit,TensorObjTypeRGB,dim);
+      Create(dataType,TensorFormatSplit,TensorObjTypeRGB,dim);
    }
-   output=(uint8_t *)GetBuf();
 
    w=bmp_w;
    h=bmp_h;
    dx=0;
    dy=0;
    bmpActualWidth=((bmp_w*3+3)/4)*4;
-   uint8_t red, blue, green;
-   for (r = 0; r < h; r++) {
-      for (c = 0; c < w; c++) {
-         blue = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+0]);
-         green = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+1]);
-         red = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+2]);
-         if(fmt==TensorFormatSplit) {
-            output[0*w*h+r*w+c] = red;
-            output[1*w*h+r*w+c] = green;
-            output[2*w*h+r*w+c] = blue;
-         } else {
-             output[3*(r*w+c)] = red;
-             output[3*(r*w+c)+1] = green;
-             output[3*(r*w+c)+2] = blue;
+   if (dataType == TensorDataTypeUint8)
+   {
+      uint8_t *output=(uint8_t *)GetBuf();
+      uint8_t red, blue, green;
+      for (r = 0; r < h; r++) {
+         for (c = 0; c < w; c++) {
+            blue = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+0]);
+            green = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+1]);
+            red = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+2]);
+            if(fmt==TensorFormatSplit) {
+               output[0*w*h+r*w+c] = red;
+               output[1*w*h+r*w+c] = green;
+               output[2*w*h+r*w+c] = blue;
+            } else {
+                output[3*(r*w+c)] = red;
+                output[3*(r*w+c)+1] = green;
+                output[3*(r*w+c)+2] = blue;
+            }
+         }
+      }
+   }else{
+      int8_t *output=(int8_t *)GetBuf();
+      uint8_t red, blue, green;
+      for (r = 0; r < h; r++) {
+         for (c = 0; c < w; c++) {
+            blue = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+0]);
+            green = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+1]);
+            red = (pict[((bmp_h-1)-(r+dy))*bmpActualWidth+3*(c+dx)+2]);
+
+            //tflite quantized input
+            if(fmt==TensorFormatSplit) {
+               output[0*w*h+r*w+c] = getQuantizedInput(red);
+               output[1*w*h+r*w+c] = getQuantizedInput(green);
+               output[2*w*h+r*w+c] = getQuantizedInput(blue);
+            } else {
+               output[3*(r*w+c)]   = getQuantizedInput(red);
+               output[3*(r*w+c)+1] = getQuantizedInput(green);
+               output[3*(r*w+c)+2] = getQuantizedInput(blue);
+            }
+
+            //simplified input
+            //if(fmt==TensorFormatSplit) {
+            //   output[0*w*h+r*w+c] = (int8_t)(red-128);
+            //   output[1*w*h+r*w+c] = (int8_t)(green-128);
+            //   output[2*w*h+r*w+c] = (int8_t)(blue-128);
+            //} else {
+            //    output[3*(r*w+c)] = (int8_t)(red-128);
+            //    output[3*(r*w+c)+1] = (int8_t)(green-128);
+            //    output[3*(r*w+c)+2] = (int8_t)(blue-128);
+            //}
          }
       }
    }

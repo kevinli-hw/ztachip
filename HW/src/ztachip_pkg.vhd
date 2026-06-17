@@ -195,9 +195,9 @@ constant register_depth_c   :integer:=(5+vector_depth_c);    -- Address width to
 
 constant register_size_c    :integer:=(2**register_depth_c);
 
-constant fu_latency_c       :integer:=6;   -- Floating point math unit execusion latency 
+constant fu_latency_c       :integer:=7;   -- Floating point math unit execusion latency
 
-constant pipeline_latency_c :integer:=9;    -- Number of cycles to start a thread instruction IN the pipeline
+constant pipeline_latency_c :integer:=10;   -- Number of cycles to start a thread instruction IN the pipeline
 
 constant ddr_vector_depth_c :integer:=3;
 
@@ -472,16 +472,21 @@ constant mu_opcode_cmp_ge_c             :STD_LOGIC_VECTOR(mu_instruction_oc_widt
 constant mu_opcode_cmp_eq_c             :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01010"; -- X1 == X2
 constant mu_opcode_cmp_ne_c             :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01011"; -- X1 != X2
 constant mu_opcode_mul_c                :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01100"; -- Y=X1*X2
-constant mu_opcode_acc_set_c            :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01101"; -- ACC=X1
+constant mu_opcode_quant_mul_c          :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01101"; -- Y=(X1*X2)>>mul_shift
+-- constant mu_opcode_acc_set_c            :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01101"; -- ACC=X1
 constant mu_opcode_lsb4_c               :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01111"; -- Get Mantissa+sign part of float number
 constant mu_opcode_msb4_c               :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10000"; -- Get exponent part of float number
 constant mu_opcode_set_exponent_c       :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10001"; -- Set exponent part of float number
 constant mu_opcode_set_float_c          :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10010"; -- Set float from mantissa and exponent
-constant mu_opcode_shl_c                :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):= "10011"; -- Shift operation on accumulator
+-- scalar shift
+constant mu_opcode_shl_c                :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10011"; -- Shift operation on accumulator
 constant mu_opcode_shla_c               :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10100"; -- Shift operation on accumulator
-constant mu_opcode_shr_c                :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):= "10101"; -- Shift operation on accumulator
+constant mu_opcode_shr_c                :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10101"; -- Shift operation on accumulator
 constant mu_opcode_shra_c               :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10110"; -- Shift operation on accumulator
 constant mu_opcode_fm_c                 :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="11000"; -- ACC=ACC+X1*X2
+-- vector shift
+constant mu_opcode_shla_v_c             :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="10111"; -- ACC=ACC<<X1
+constant mu_opcode_shra_v_c             :STD_LOGIC_VECTOR(mu_instruction_oc_width_c-1 DOWNTO 0):="01110"; -- ACC=ACC>>X1
 
 --- Fused multiply add-sub opcode definition
 constant fm_oc_hi_c                     :integer:=4;
@@ -489,6 +494,9 @@ constant fm_oc_lo_c                     :integer:=3;
 constant fm_add_sub_c                   :integer:=0; -- fma=1;fms=0
 constant fm_neg_c                       :integer:=1; -- fnma|fnms=1; fma|fms=0;
 constant fm_xreg_sel_c                  :integer:=2; -- 0 for x1*x2+_A; 1 for x1*_A+x2
+
+--- Shift distance for quant_mul
+constant quant_mul_shift_distance       :integer:=15; -- match with compilation value
 
 --------
 -- Control instruction opcodes
@@ -648,9 +656,9 @@ type vector_forks_t is array(natural range <>) of vector_fork_t;
 -- Floating point type definition
 -------
 
-constant fp12_exp_width_c:integer:=4;
+constant fp12_exp_width_c:integer:=3;
 
-constant fp12_mantissa_width_c:integer:=11;
+constant fp12_mantissa_width_c:integer:=12;
 
 constant fp32_exp_width_c:integer:=8;
 
@@ -1086,7 +1094,7 @@ constant register2_fpu_set_P_CNT        :integer:=5; -- P subfield to set CNT pa
 constant register2_fpu_set_P_C2         :integer:=6; -- P subfield to set C2 parameter
 constant register2_fpu_set_W_FP16       :integer:=0; -- W subfield for FP16 data type
 constant register2_fpu_set_W_FP32       :integer:=16; -- W subfield for FP32 data type.
-constant register2_fpu_set_W_INT16      :integer:=32; -- W subfield for INT16 data type.
+constant register2_fpu_set_W_INT8       :integer:=32; -- W subfield for INT8 data type.
 constant register2_fpu_set_W_ZFP16      :integer:=48; -- W subfield for ztachip custom FP16
 constant register2_fpu_set_M_VALUE      :integer:=0; -- M subfield for access by value
 constant register2_fpu_set_M_ADDR       :integer:=8; -- M subfield for access by SRAM address
@@ -1568,7 +1576,6 @@ COMPONENT falu_core IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
-        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -1600,7 +1607,6 @@ COMPONENT falu IS
         SIGNAL input_fast_in        : IN STD_LOGIC;
         SIGNAL A_addr               : IN unsigned(sram_depth_c-1 DOWNTO 0);
         SIGNAL A_precision          : IN unsigned(2 downto 0);
-        SIGNAL A_int                : IN STD_LOGIC;
         SIGNAL A_floor              : IN STD_LOGIC;
         SIGNAL A_abs                : IN STD_LOGIC;
         SIGNAL B_in                 : IN fp32_t;
@@ -1655,7 +1661,6 @@ END COMPONENT;
 component fp2int is
    generic
    (
-      WIDTH:integer;
       LATENCY:natural
    );
    port 
@@ -1663,7 +1668,7 @@ component fp2int is
       SIGNAL reset_in    : in std_logic;
       SIGNAL clock_in    : in std_logic;
       SIGNAL x_in        : in fp32_t;
-      SIGNAL y_out       : out std_logic_vector(WIDTH-1 downto 0)
+      SIGNAL y_out       : out std_logic_vector(31 downto 0)
    );
 end component;
 
@@ -4703,9 +4708,10 @@ COMPONENT barrel_shifter_a is
       DIST_WIDTH : natural;
       DATA_WIDTH : natural
    );
-   port 
+   port
    (
       direction_in : in std_logic;
+      rounding_in  : in std_logic;
       data_in      : in std_logic_vector((DATA_WIDTH-1) downto 0);
       distance_in  : in std_logic_vector((DIST_WIDTH-1) downto 0);
       data_out     : out std_logic_vector((DATA_WIDTH-1) downto 0)
@@ -4718,9 +4724,10 @@ COMPONENT barrel_shifter_l is
       DIST_WIDTH : natural;
       DATA_WIDTH : natural
    );
-   port 
+   port
    (
       direction_in : in std_logic;
+      rounding_in  : in std_logic;
       data_in      : in std_logic_vector((DATA_WIDTH-1) downto 0);
       distance_in  : in std_logic_vector((DIST_WIDTH-1) downto 0);
       data_out     : out std_logic_vector((DATA_WIDTH-1) downto 0)

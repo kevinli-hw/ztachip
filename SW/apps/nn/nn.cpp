@@ -25,7 +25,7 @@
 #include "../../base/ztalib.h"
 #include "../../src/soc.h"
 #include "flatbuffer/schema_generated.h"
-#include "nn.h" 
+#include "nn.h"
 #include "nn_add.h"
 #include "nn_concat.h"
 #include "nn_conv2d.h"
@@ -33,9 +33,11 @@
 #include "nn_objdetect.h"
 #include "nn_poolavg.h"
 #include "nn_reshape.h"
+#include "nn_pad.h"
+#include "nn_poolmax.h"
 
 // Base class to process to process neural network
- 
+
 NeuralNet::NeuralNet() : GraphNode() {
    m_runningStep=-1;
    m_input=0;
@@ -55,6 +57,9 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
       case NeuralNetOperatorConvDepthWise:
          layer=new NeuralNetLayerConv2D(this,op_,ConvolutionTypeDepthWise);
          break;
+      case NeuralNetOperatorFC:
+         layer=new NeuralNetLayerConv2D(this,op_,ConvolutionType2D);
+         break;
       case NeuralNetOperatorConcatenation:
          layer=new NeuralNetLayerConcat(this,op_);
          break;
@@ -64,6 +69,9 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
       case NeuralNetOperatorReshape:
          layer=new NeuralNetLayerReshape(this,op_);
          break;
+      case NeuralNetOperatorPad:
+         layer=new NeuralNetLayerPad(this,op_);
+         break;
       case NeuralNetOperatorDetection:
          layer=new NeuralNetLayerObjDetect(this,op_);
          break;
@@ -71,6 +79,12 @@ NeuralNetLayer *NeuralNet::CreateLayer(int layerId,NeuralNetOperatorDef* op_) {
          layer=new NeuralNetLayerAdd(this,op_);
          break;
       case NeuralNetOperatorAvgPool2D:
+         layer=new NeuralNetLayerPoolAvg(this,op_);
+         break;
+      case NeuralNetOperatorMaxPool2D:
+         layer=new NeuralNetLayerPoolMax(this,op_);
+         break;
+      case NeuralNetOperatorMean:
          layer=new NeuralNetLayerPoolAvg(this,op_);
          break;
       case NeuralNetOperatorUnknown:
@@ -93,13 +107,16 @@ ZtaStatus NeuralNet::LoadBegin(TENSOR *input,std::vector<TENSOR *> &_output) {
 
 // Model loading has been completed from derived class
 ZtaStatus NeuralNet::LoadEnd() {
+   //printf("LoadEnd start\n");
    // Assign input tensor as input data to the model
    if(AssignInputTensor(true) != ZtaStatusOk)
-      return ZtaStatusFail;   
+      return ZtaStatusFail;
 
-   // Prune out all the passthrough layers (reshape)
+   //printf("AssignInputTensor\n");
+   // Prune out all the passthrough layers (reshape, padding)
    for(int i=(int)m_operators.size()-1;i >= 0;i--) {
       if(m_operators[i]->GetIoType()==LayerIoPassthrough) {
+         //printf("layer passthrough, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
          int output_id=m_operators[i]->m_def.output[0];
          int input_id=m_operators[i]->m_def.input[0];
          for(int j=0;j < (int)m_operators.size();j++) {
@@ -107,16 +124,20 @@ ZtaStatus NeuralNet::LoadEnd() {
                continue;
             if(m_operators[j]->GetIoType() != LayerIoPassthrough) {
                for(int k=0;k < (int)m_operators[j]->m_def.input.size();k++) {
-                  if(m_operators[j]->m_def.input[k]==output_id)
-                     m_operators[j]->m_def.input[k]=input_id;
+                  if(m_operators[j]->m_def.input[k]==output_id){
+                     //printf("before change: %d, after change: %d\n", m_operators[j]->m_def.input[k], input_id);
+                     m_operators[j]->m_def.input[k]=input_id; //only change buffer id, not shape
+                  }
                }
             }
          }
       }
    }
+   //printf("Prune passthrough\n");
 
    // Assign output format type
    for(int i=0;i < (int)m_operators.size();i++) {
+      //printf("layer IO type: %d, index: %d, op->id: %d\n", m_operators[i]->GetIoType(), i, m_operators[i]->m_def.op);
       switch(m_operators[i]->GetIoType()) {
          // Check for output requirement
          case LayerIoTypeInInterleaveOutInterleave: {
@@ -158,14 +179,16 @@ ZtaStatus NeuralNet::LoadEnd() {
             }
          case LayerIoTypeInFlatOutInterleaveAndOrFlat: {
             // Input must be flat format
+            //printf("layer IO LayerIoTypeInFlatOutInterleaveAndOrFlat, index: %d, op->id: %d\n", i, m_operators[i]->m_def.op);
             if(!BufferFlatPresent(m_operators[i]->m_def.input[0])) {
+               //printf("buffer allocate prepare\n");
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),true,false);
-            }            
+            }
             break;
             }
          case LayerIoTypeInInterleaveOutInterleaveAndOrFlat: {
-            // Input must be interleaved   
+            // Input must be interleaved
             if(!BufferInterleavePresent(m_operators[i]->m_def.input[0])) {
                BufferAllocatePrepare(m_operators[i]->m_def.input[0],m_operators[i]->m_def.input_type[0],
             		   TENSOR::GetTensorSize(*m_operators[i]->m_def.input_shape[0]),false,true);
@@ -188,7 +211,7 @@ ZtaStatus NeuralNet::LoadEnd() {
             }
             break;
             }
-         case LayerIoPassthrough: {   
+         case LayerIoPassthrough: {
             // Igore reshape. Just a passthrough
             break;
             }
@@ -274,11 +297,16 @@ ZtaStatus NeuralNet::Unload() {
 // Assign input tensor
 
 ZtaStatus NeuralNet::AssignInputTensor(bool firstTime) {
+#ifdef PRINTF_LOG_ON
    // Check input image is correct dimension,type and format
+   printf("m_operators[0]->m_def.input_type[0]: %d\n", m_operators[0]->m_def.input_type[0]);
+   printf("m_input->GetDataType(): %d\n", m_input->GetDataType());
+#endif
    if(TENSOR::GetTensorSize(*m_operators[0]->m_def.input_shape[0])==TENSOR::GetTensorSize(m_input->m_dim) &&
-      (m_input->GetFormat()==TensorFormatSplit) &&
-      ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) || 
-      (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT8 && m_input->GetDataType()==TensorDataTypeInt8) || 
+      //(m_input->GetFormat()==TensorFormatSplit) &&
+      (m_input->GetFormat()==TensorFormatSplit || m_input->GetFormat()==TensorFormatInterleaved) &&
+      ((m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_UINT8 && m_input->GetDataType()==TensorDataTypeUint8) ||
+      (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT8 && m_input->GetDataType()==TensorDataTypeInt8) ||
       (m_operators[0]->m_def.input_type[0]==NeuralNetTensorType_INT16 && m_input->GetDataType()==TensorDataTypeInt16))) {
       // Only support the data types above for now...
       BufferAllocate(m_operators[0]->m_def.input[0],m_input);
@@ -387,6 +415,7 @@ ZtaStatus NeuralNet::Execute(int queue,int stepMode)
          if(!GraphNode::AllRequestAreCompleted(queue))
             return ZtaStatusPending;
       }
+      //printf("current layer: %d, op_code: %d\n", m_operators[m_runningStep]->m_def.index, m_operators[m_runningStep]->m_def.op);
       rc=m_operators[m_runningStep]->Evaluate(queue);
       if(rc==ZtaStatusPending)
          return rc;

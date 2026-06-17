@@ -45,8 +45,11 @@ ZtaStatus NeuralNetLayerAdd::Prepare() {
    op->u.add.output.shift=-op->u.add.output.shift;
    op->u.add.input[0].shift=-op->u.add.input[0].shift;
    op->u.add.input[1].shift=-op->u.add.input[1].shift;
-   min[0]=(int32_t)SpuInputEval((float)0,this,0,op->u.add.output.shift);
-   max[0]=(int32_t)SpuInputEval((float)255,this,0,op->u.add.output.shift);
+   bool is_int8 = (op->input_type[0] == NeuralNetTensorType_INT8);
+   min[0]=(int32_t)SpuInputEval(is_int8 ? (float)-128 : (float)0,  this,0,op->u.add.output.shift);
+   max[0]=(int32_t)SpuInputEval(is_int8 ? (float)127  : (float)255,this,0,op->u.add.output.shift);
+   //min[0]=(int32_t)SpuInputEval((float)0,this,0,op->u.add.output.shift);
+   //max[0]=(int32_t)SpuInputEval((float)255,this,0,op->u.add.output.shift);
    range=std::abs(min[0]);
    if(range<std::abs(max[0]))
       range=std::abs(max[0]);
@@ -59,8 +62,11 @@ ZtaStatus NeuralNetLayerAdd::Prepare() {
       shift=10-bits;
    else
       shift=0;
-   min[1]=(int32_t)SpuInputEval((float)0,this,1,op->u.add.output.shift);
-   max[1]=(int32_t)SpuInputEval((float)255,this,1,op->u.add.output.shift);
+
+   min[1]=(int32_t)SpuInputEval(is_int8 ? (float)-128 : (float)0,  this,0,op->u.add.output.shift);
+   max[1]=(int32_t)SpuInputEval(is_int8 ? (float)127  : (float)255,this,0,op->u.add.output.shift);
+//   min[1]=(int32_t)SpuInputEval((float)0,this,1,op->u.add.output.shift);
+//   max[1]=(int32_t)SpuInputEval((float)255,this,1,op->u.add.output.shift);
    range=std::abs(min[1]);
    if(range<std::abs(max[1]))
       range=std::abs(max[1]);
@@ -89,6 +95,7 @@ ZtaStatus NeuralNetLayerAdd::Evaluate(int queue) {
    bool interleave=(m_nn->BufferGetInterleave(op->input[0])!=0);
    kernel_add_exe(
       (unsigned int)GetJobId(queue),
+      (op->input_type[0] == NeuralNetTensorType_INT8) ? 1:0, //is_int
       op->u.add.size,
 	  (unsigned int)((interleave)?m_nn->BufferGetInterleave(op->input[0]):m_nn->BufferGetFlat(op->input[0])),
 	  (unsigned int)((interleave)?m_nn->BufferGetInterleave(op->input[1]):m_nn->BufferGetFlat(op->input[1])),
@@ -98,15 +105,18 @@ ZtaStatus NeuralNetLayerAdd::Evaluate(int queue) {
 }
 
 int16_t NeuralNetLayerAdd::SpuInputEval(int16_t _in,void *pparm,uint32_t parm,uint32_t parm2)
-{  
+{
    NeuralNetLayer *layer=static_cast<NeuralNetLayer *>(pparm);
    NeuralNetOperatorDef *op_=(layer)?&((NeuralNetLayerAdd *)layer)->m_def:0;
    static NeuralNetOperatorDef *op=0;
-   uint8_t input;
    int output_shift=parm2;
    if(op_)
       op=op_;
-   input = (uint8_t)_in;
+   int32_t input = 0;
+   if (op->input_type[0] == NeuralNetTensorType_UINT8)
+      input = (uint8_t)_in;
+   else if (op->input_type[0] == NeuralNetTensorType_INT8)
+      input = (int8_t)_in;
    const int32_t input_val=op->u.add.input[parm].offset+input;
    const int32_t shifted_input_val=input_val*(1 << op->u.add.input_shift);
    int32_t scaled_input_val=((int64_t)shifted_input_val*(int64_t)op->u.add.input[parm].multiplier+(1 << 30)) >> (31);

@@ -54,7 +54,9 @@ constant exmem_data_width_c:integer:=128;
 -- Main clock speed
 ---------------------------------------------------------------
 
-constant main_clock_c:integer:=125000000;
+--constant main_clock_c:integer:=125000000;
+--constant main_clock_c:integer:=100000000;
+constant main_clock_c:integer:=83333333;
 
 ---------------------------------------------------------------
 -- Enable/disable FPU. This option is required to run LLM models

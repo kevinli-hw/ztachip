@@ -63,7 +63,7 @@ public:
    ZtaStatus Clone(TENSOR *other);
    ZtaStatus Alias(TENSOR *other);
    ZtaStatus Alias(ZTA_SHARED_MEM _shm);
-   ZtaStatus CreateWithBitmap(const char *bmpFile,TensorFormat fmt=TensorFormatSplit);
+   ZtaStatus CreateWithBitmap(const char *bmpFile,TensorFormat fmt=TensorFormatSplit, TensorDataType dataType=TensorDataTypeUint8);
    ~TENSOR();
    TensorDataType GetDataType() {return m_dataType;}
    TensorFormat GetFormat() {return m_fmt;}
@@ -83,6 +83,7 @@ private:
    ZtaStatus setObjType(TensorObjType _objType);
    ZtaStatus setDimension(std::vector<int> &dim);
    ZtaStatus allocate(ZTA_SHARED_MEM shm=0);
+   int8_t    getQuantizedInput(uint8_t data);
 private:
    ZTA_SHARED_MEM m_shm;
    bool m_isAlias;

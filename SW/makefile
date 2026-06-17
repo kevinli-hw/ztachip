@@ -14,8 +14,9 @@ PROJ_NAME=ztachip
 ###
 #######
 
-UNIT_TEST=no
-
+UNIT_TEST=yes
+PRINTF_LOG=no
+STEP_MODE=no
 LLM_TEST=no
 
 
@@ -28,7 +29,7 @@ MULDIV=yes
 
 MAIN = src/main.cpp
 
-SRCS = 	base/newlib.c \
+SRCS = 	base/simplelib.c \
 	base/ztalib.c \
 	base/ztalog.c \
 	base/tensor.cpp \
@@ -62,6 +63,8 @@ SRCS = 	base/newlib.c \
 	apps/nn/nn_objdect.cpp \
 	apps/nn/nn_poolavg.cpp \
 	apps/nn/nn_reshape.cpp \
+	apps/nn/nn_pad.cpp \
+	apps/nn/nn_poolmax.cpp \
 	apps/nn/nn_util.cpp \
 	apps/nn/tf.cpp \
 	apps/nn/tf_util.cpp \
@@ -80,6 +83,7 @@ SRCS = 	base/newlib.c \
 	src/sdmm.c \
 	src/chat.cpp \
 	src/soc.cpp
+  #base/newlib.c
 
 OBJDIR = build
 
@@ -128,6 +132,14 @@ endif
 
 ifeq ($(UNIT_TEST),yes)
 	CFLAGS += -DZTACHIP_UNIT_TEST
+endif
+
+ifeq ($(PRINTF_LOG),yes)
+	CFLAGS += -DPRINTF_LOG_ON
+endif
+
+ifeq ($(STEP_MODE),yes)
+	CFLAGS += -DSTEP_MODE_ON
 endif
 
 ifeq ($(LLM_TEST),yes)

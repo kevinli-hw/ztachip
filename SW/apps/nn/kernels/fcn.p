@@ -28,6 +28,8 @@ int inner_product::out_scale;
 vint32 inner_product::_A;
 vint16 inner_product::biasHi;
 vint16 inner_product::biasLo;
+vint16 inner_product::activation_multiplier;
+vint16 inner_product::activation_shift;
 
 _kernel_ void inner_product::init(int _out_scale) {
    out_scale=_out_scale;
@@ -35,7 +37,7 @@ _kernel_ void inner_product::init(int _out_scale) {
 
 _kernel_ void inner_product::start() {
    _A = biasHi;
-   _A = (_A << (DATA_BIT_WIDTH-2));
+   _A = (_A << (DATA_BIT_WIDTH-1));
    _A += biasLo;
 }
 
@@ -53,6 +55,12 @@ _kernel_ void inner_product::activate_none() {
    top = _A >> out_scale;
 }
 
+_kernel_ void inner_product::activate_per_channel() {
+   _A = _A * activation_multiplier;
+   top = _A >> activation_shift;
+}
+
+
 // ---- Pooling layer...
 
 vint16 max_pool::bot[POOL_BOT_SIZE];
@@ -63,6 +71,17 @@ vint16 max_pool::top;
 _kernel_ void max_pool::init(int _out_scale) {
    out_scale=_out_scale;
    _A=0;
+}
+
+// Max pooling: initialize the per-lane running max to the pad/min value, and
+// prefill the whole window buffer so unused slots (when ksz*ksz < POOL_BOT_SIZE)
+// dont corrupt the result. Uses the normal vector register 'top', NOT the accumulator.
+_kernel_ void max_pool::init_max(int _pad_val) {
+   int i;
+   top = _pad_val;
+#pragma unroll
+   for(i=0;i < POOL_BOT_SIZE;i++)
+      bot[i] = _pad_val;
 }
 
 // Do pooling averate.
@@ -80,10 +99,31 @@ _kernel_ void max_pool::exe() {
    }
 }
 
+// Seed running max from bot[0] (reliable vint16 copy), then fold bot[1..7].
+// init_max must be called beforehand to fill bot[ksz..7] with pad_val.
+_kernel_ void max_pool::exe_max_first() {
+   int i;
+   top = bot[0];
+#pragma unroll
+   for(i=1;i < POOL_BOT_SIZE;i++) {
+      _VMASK = LT(top,bot[i]); top = bot[i]; _VMASK = -1;
+   }
+}
+
+// Fold bot[0..7] into running max.
+_kernel_ void max_pool::exe_max() {
+   int i;
+#pragma unroll
+   for(i=0;i < POOL_BOT_SIZE;i++) {
+      _VMASK = LT(top,bot[i]); top = bot[i]; _VMASK = -1;
+   }
+}
+
 _kernel_ void max_pool::finish() {
    top = _A >> out_scale;
    _A = 0;
 }
+
 
 // --- Do concatenation layer.
 

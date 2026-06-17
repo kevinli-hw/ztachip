@@ -78,6 +78,8 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
          return NeuralNetOperatorAdd;
       case BuiltinOperator_AVERAGE_POOL_2D:
          return NeuralNetOperatorAvgPool2D;
+      case BuiltinOperator_MAX_POOL_2D:
+         return NeuralNetOperatorMaxPool2D;
       case BuiltinOperator_CONV_2D:
          return NeuralNetOperatorConv2D;
       case BuiltinOperator_DEPTHWISE_CONV_2D:
@@ -88,6 +90,12 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
          return NeuralNetOperatorLogistic;
       case BuiltinOperator_RESHAPE:
          return NeuralNetOperatorReshape;
+      case BuiltinOperator_FULLY_CONNECTED:
+         return NeuralNetOperatorFC;
+      case BuiltinOperator_PAD:
+         return NeuralNetOperatorPad;
+      case BuiltinOperator_MEAN:
+         return NeuralNetOperatorMean;
       case BuiltinOperator_CUSTOM:
          if(strcmp(opcode->custom_code()->c_str(),"TFLite_Detection_PostProcess")==0)
             return NeuralNetOperatorDetection;
@@ -95,7 +103,8 @@ NeuralNetOperator TfliteNn::ParseOpcode(const tflite::OperatorCode *opcode)
             return NeuralNetOperatorUnknown;
          }
       default:
-         return NeuralNetOperatorUnknown; 
+         printf("Unknown opcode: %ld\n", GetBuiltinCode(opcode));
+         return NeuralNetOperatorUnknown;
    }
 }
 
@@ -190,45 +199,97 @@ ZtaStatus TfliteNn::PopulateConvolutionQuantizationParams(
     const TfliteNnTensorDef* filter, const TfliteNnTensorDef* bias, TfliteNnTensorDef* output,
     const NeuralNetActivation activation, int32_t* multiplier, int32_t* shift,
     int32_t* output_activation_min, int32_t* output_activation_max,
-    int32_t* per_channel_multiplier, int* per_channel_shift) {
-
+    std::vector<int32_t> *multiplier_per_channel, std::vector<int> *shift_per_channel, std::vector<double> *output_scale_per_channel,
+    bool* per_tensor, bool* per_channel)
+//    int32_t* per_channel_multiplier, int* per_channel_shift) {
+  {
   // Populate multiplier and shift using affine quantization.
   const int num_channels = filter->quantization.m_scale.size();
   const float input_scale = input->quantization.m_scale[0];
   const float output_scale = output->quantization.m_scale[0];
   const std::vector<float> &filter_scales = filter->quantization.m_scale;
-  if(num_channels != 1) {
-     return ZtaStatusFail;
+  //if(num_channels != 1) {
+  //   return ZtaStatusFail;
+  //}
+  if (num_channels == 1){
+    if(per_tensor)  *per_tensor = true;
+    if(per_channel) *per_channel = false;
+  }else{
+    if(per_tensor)  *per_tensor = false;
+    if(per_channel) *per_channel = true;
   }
-  for (int i = 0; i < num_channels; ++i) {
-    const double filter_scale = static_cast<double>(filter_scales[i]);
-    const double effective_output_scale = static_cast<double>(input_scale) *
-                                          filter_scale /
-                                          static_cast<double>(output_scale);
-    int32_t significand;
-    int shift;
-    QuantizeMultiplier(effective_output_scale, &significand, &shift);
-    if(per_channel_multiplier)
-      per_channel_multiplier[i] = significand;
-    if(per_channel_shift)
-      per_channel_shift[i] = shift;
-  }
+  
+  if (num_channels > 1)
+  {
+    // per-channel quantization
+    int32_t significand = 0;
+    int shift = 0;
 
-  // Populate scalar quantization parameters.
-  // This check on legacy quantization parameters is kept only for backward
-  // compatibility.
-  if (input->type == NeuralNetTensorType_UINT8) {
-    // Check bias scale == input scale * filter scale.
-    double real_multiplier = 0.0;
-    GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
-    int exponent;
+    for (int i = 0; i < num_channels; ++i) {
+      const double filter_scale = static_cast<double>(filter_scales[i]);
+      const double effective_output_scale = static_cast<double>(input_scale) * filter_scale / static_cast<double>(output_scale);
+      if(output_scale_per_channel) output_scale_per_channel->push_back(effective_output_scale);
+      if (effective_output_scale == 0.) {
+        significand = 0;
+        shift = 0;
+      }else{
+        const double q = frexp(effective_output_scale, &shift);
+        int32_t q_fixed = static_cast<int32_t>(round(q * (1ll << 15)));
+        assert(q_fixed <= (1ll << 15));
+        if (q_fixed == (1ll << 15)) {
+          //q_fixed /= 2;
+          //++shift;
+          q_fixed = (1ll << 15) - 1;
+          //printf("scale close to 1\n");
+        }
+        if (shift > 0){
+          q_fixed = (1ll << 15) - 1;
+          shift = 0;
+          //printf("scale > 1\n");
+        }
+       if (shift < -31) {
+          shift = 0;
+          q_fixed = 0;
+        }
+        significand = static_cast<int16_t>(q_fixed);
+      }
+      if(multiplier_per_channel)
+        multiplier_per_channel->push_back(significand);
+      if(shift_per_channel)
+        shift_per_channel->push_back(shift);
+    }
 
-    // Populate quantization parameteters with multiplier and shift.
-    QuantizeMultiplier(real_multiplier, multiplier, &exponent);
-    *shift = -exponent;
-    CalculateActivationRangeUint8(activation, output, output_activation_min,
-                                  output_activation_max);
+    //per-channel multiplier, per-tensor shift
+    for (int i = 0; i < num_channels; i++)
+    {
+      //while((*shift_per_channel)[i] < max_shift){
+      //  (*multiplier_per_channel)[i] /= 2;
+      //  (*shift_per_channel)[i]++;
+      //}
+      //if ((*shift_per_channel)[i] < max_shift){
+      //  int shift_adjust = max_shift-(*shift_per_channel)[i];
+      //  (*multiplier_per_channel)[i] = ((*multiplier_per_channel)[i] + (1 << (shift_adjust-1))) >> shift_adjust;
+      //  (*shift_per_channel)[i] = max_shift;
+      //}
+      if(shift_per_channel){
+        if ((*shift_per_channel)[i] > 0)
+          assert(0);
+        (*shift_per_channel)[i] = -(*shift_per_channel)[i];
+      }
+    }
   }
+  // per-tensor quantization
+  double real_multiplier = 0.0;
+  GetQuantizedConvolutionMultipler(input,filter,bias,output,&real_multiplier);
+  int exponent;
+
+  // Populate quantization parameteters with multiplier and shift.
+  QuantizeMultiplier(real_multiplier, multiplier, &exponent);
+  *shift = exponent;
+  if (output->type == NeuralNetTensorType_UINT8)
+    CalculateActivationRangeUint8(activation, output, output_activation_min,output_activation_max);
+  else
+    CalculateActivationRangeInt8(activation, output, output_activation_min,output_activation_max);
   return ZtaStatusOk;
 }
 
@@ -256,7 +317,6 @@ void TfliteNn::CalculateActivationRangeQuantizedImpl(NeuralNetActivation activat
                                            int32_t* act_min, int32_t* act_max) {
   const float scale = output->quantization.m_scale[0];
   const int32_t zero_point = output->quantization.m_zeroPoint[0];
-
   auto quantize = [scale, zero_point](float f) {
     return zero_point + static_cast<int32_t>(round(f / scale));
   };
@@ -315,7 +375,6 @@ void TfliteNn::CalculateActivationRangeInt8(NeuralNetActivation activation,
                                   int32_t* act_max) {
   const int32_t qmin = std::numeric_limits<int8_t>::min();
   const int32_t qmax = std::numeric_limits<int8_t>::max();
-
   CalculateActivationRangeQuantizedImpl(activation, qmin, qmax, output, act_min,
                                         act_max);
 }

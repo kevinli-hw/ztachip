@@ -16,6 +16,7 @@
 // limitations under the License.
 //------------------------------------------------------------------------------
 
+#include <stdio.h>
 #include <stdbool.h>
 #include "../../../../SW/base/ztalib.h"
 #include "../../../../SW/src/soc.h"
@@ -24,10 +25,12 @@
 #define BUFSZ (16*8*NUM_PCORE*2)
 
 static volatile uint16_t inbuf[BUFSZ];
+static volatile uint16_t inbuf_2[BUFSZ];
 static volatile uint16_t outbuf[BUFSZ];
 
 typedef struct {
    uint32_t in_p;
+   uint32_t in_p_2;
    uint32_t out_p;
    int len;
 } REQUEST;
@@ -50,8 +53,11 @@ static void test(void *_p,int pid) {
    }
 
    >DTYPE(INT16)PCORE(NUM_PCORE)[0:NUM_PCORE-1].THREAD[0:15].test::_A[0:7] <= DTYPE(INT16)MEM(req->in_p)[from:to];
+   >DTYPE(INT16)PCORE(NUM_PCORE)[0:NUM_PCORE-1].THREAD[0:15].test::_B[0:7] <= DTYPE(INT16)MEM(req->in_p_2)[from:to];
 
-   >EXE_LOCKSTEP(test::add,NUM_PCORE);
+   //>EXE_LOCKSTEP(test::add,NUM_PCORE);
+   //>EXE_LOCKSTEP(test::quant_mul,NUM_PCORE);
+   >EXE_LOCKSTEP(test::shift_r_v,NUM_PCORE);
 
    ztaTaskYield();
 
@@ -71,11 +77,15 @@ void kernel_test_exe() {
    ztaInitPcore(zta_pcore_img);
 
    req.in_p=(uint32_t)&inbuf[0];
+   req.in_p_2=(uint32_t)&inbuf_2[0];
    req.out_p=(uint32_t)&outbuf[0];
    req.len = BUFSZ;
    
    for(i=0;i < req.len;i++)
       inbuf[i]=(i&0xFF);
+   for(i=0;i < req.len;i++)
+      inbuf_2[i]=(i&0x1F);
+
 
    FLUSH_DATA_CACHE();
 
@@ -90,7 +100,7 @@ void kernel_test_exe() {
    }   
 
    for(i=0;i < req.len;i++) {
-      if(outbuf[i] != ((i&0xFF)+1)) {
+      if(outbuf[i] != ((i&0xFF)>>(i&0x1F))) {
          for(;;) {
             APB[0]=0xffffffff;
          }

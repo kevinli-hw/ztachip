@@ -645,7 +645,7 @@ end process;
 process(read2,read_addr,read_burstlen2,read_burstlen3,read_vector_in,read_piggyback_r)
 variable ddr_addr_v:std_logic_vector(ddr_bus_width_c-1 downto 0);
 begin
-   ddr_addr_v(ddr_bus_width_c-1 downto dp_full_addr_width_c+data_byte_width_depth_c) := (others=>'0');
+   ddr_addr_v(ddr_bus_width_c-1 downto dp_full_addr_width_c+data_byte_width_depth_c-1) := (others=>'0');
    ddr_addr_v(dp_full_addr_width_c+data_byte_width_depth_c-1 downto ddr_vector_depth_c+data_byte_width_depth_c) := read_addr(dp_full_addr_width_c-1 downto ddr_vector_depth_c);
    ddr_addr_v(ddr_vector_depth_c+data_byte_width_depth_c-1 downto 0) := (others=>'0');
    if read_piggyback_r='0' then

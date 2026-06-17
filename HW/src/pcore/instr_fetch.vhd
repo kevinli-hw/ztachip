@@ -240,7 +240,7 @@ SIGNAL tid_iregister_auto_r:iregister_auto_t;
 SIGNAL ready2:STD_LOGIC;
 
 --constant proc_delay_c:integer:=14-pipeline_latency_c-1;
-constant proc_delay_c:integer:=11-pipeline_latency_c-1;
+constant proc_delay_c:integer:=12-pipeline_latency_c-1;
 
 -----
 -- Generate task mask

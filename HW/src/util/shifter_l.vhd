@@ -32,6 +32,7 @@ entity barrel_shifter_l is
    port 
    (
       direction_in : in std_logic;
+      rounding_in  : in std_logic;
       data_in      : in std_logic_vector((DATA_WIDTH-1) downto 0);
       distance_in  : in std_logic_vector((DIST_WIDTH-1) downto 0);
       data_out     : out std_logic_vector((DATA_WIDTH-1) downto 0)
@@ -42,10 +43,29 @@ architecture rtl of barrel_shifter_l is
 signal distance:unsigned(DIST_WIDTH-1 downto 0);
 signal shift_left:std_logic_vector((DATA_WIDTH-1) downto 0);
 signal shift_right:std_logic_vector((DATA_WIDTH-1) downto 0);
+signal rounding_bit:std_logic;
+signal shift_right_rounded:std_logic_vector((DATA_WIDTH-1) downto 0);
 begin
 
 distance <= unsigned(distance_in);
-data_out <= shift_right when (direction_in = '1') else shift_left; 
+
+process(data_in, distance_in)
+variable dist_int : integer;
+begin
+   rounding_bit <= '0';
+   dist_int := to_integer(unsigned(distance_in));
+   if (dist_int > 0 and rounding_in = '1')then
+      rounding_bit <= data_in(dist_int - 1);
+   end if;
+end process;
+
+shift_right_rounded <= std_logic_vector(unsigned(shift_right) + (to_unsigned(0,DATA_WIDTH-1) & rounding_bit));
+
+data_out <= shift_right_rounded when (direction_in = '1' and rounding_in = '1') else
+            shift_right when (direction_in = '1') else
+            shift_left;
+
+--data_out <= shift_right when (direction_in = '1') else shift_left; 
 
 sra_i : SHIFT_RIGHT_L
    GENERIC MAP (

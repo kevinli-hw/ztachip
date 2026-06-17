@@ -122,7 +122,7 @@ int cGraph::interference(CLASSID _clid,cIdentifier *id)
    size_t i;
    for(i=0;i < M_edge.size();i++)
    {
-      if((M_edge[i]->m_id1==id && M_edge[i]->m_id2->isKindOf(_clid) && !M_edge[i]->m_id2->isFixed()) || 
+      if((M_edge[i]->m_id1==id && M_edge[i]->m_id2->isKindOf(_clid) && !M_edge[i]->m_id2->isFixed()) ||
          (M_edge[i]->m_id2==id && M_edge[i]->m_id1->isKindOf(_clid) && !M_edge[i]->m_id1->isFixed()))
          count++;
    }
@@ -179,14 +179,14 @@ int cGraph::color(CLASSID _clid,std::vector<cGraphColor *> *_color,cIdentifier *
    id->m_color=_color->at(found);
    if(_clid==cIdentifierInteger::getCLID() && M_intOnlyLst.exist(id))
    {
-      // If one of the Identifier allocated to a color is integer only (not pointer), 
+      // If one of the Identifier allocated to a color is integer only (not pointer),
       // then the color is also integer only
       id->m_color->m_intOnly=true;
    }
    return 0;
 }
 
-// Perform register allocation using the graph-coloring alogorithm 
+// Perform register allocation using the graph-coloring alogorithm
 
 int cGraph::colorGraph(CLASSID _clid,std::vector<cGraphColor *> *_color)
 {
@@ -194,7 +194,7 @@ int cGraph::colorGraph(CLASSID _clid,std::vector<cGraphColor *> *_color)
    cIdentifier *id;
    size_t i;
    cIdentifierVector stack,stack2;
-   
+
    for(i=0;i < M_regLst.size();i++)
    {
       if(!M_regLst[i]->isKindOf(_clid))
@@ -345,7 +345,7 @@ int cGraph::buildFunc(cInstruction *_func)
    }
    else
       newClass=false;
-   classInfo=&classes[className]; 
+   classInfo=&classes[className];
 
    intSize=classInfo->intSize;
    pointerSize=classInfo->pointerSize;
@@ -454,11 +454,11 @@ int cGraph::buildFunc(cInstruction *_func)
          node->m_out.clear();
          for(j=0;j < node->m_succ.size();j++)
             node->m_out.vector_union(&node->m_succ[j]->m_in);
-         
+
          node->m_instruction->getUse(&node->m_in);
          node->m_instruction->getDef(&lst2);
          lst3.clone(&node->m_out);
-         lst3.vector_minus(&lst2);   
+         lst3.vector_minus(&lst2);
          node->m_in.vector_union(&lst3);
 
          if(!node->m_in2.equal(&node->m_in) ||
@@ -497,7 +497,7 @@ int cGraph::buildFunc(cInstruction *_func)
    }
 
   // -----------------------------------------
-  // Allocate class scope variables... 
+  // Allocate class scope variables...
   // --------------------------------------------
 
   if(newClass)
@@ -520,7 +520,7 @@ int cGraph::buildFunc(cInstruction *_func)
                id->allocate(shareSize);
                shareSize += id->getLen();
             }
-         } 
+         }
       }
       id=(cIdentifier *)id->getNext();
    }
@@ -542,7 +542,7 @@ int cGraph::buildFunc(cInstruction *_func)
                id->allocate(privateSize);
                privateSize += id->getLen();
             }
-         } 
+         }
       }
       id=(cIdentifier *)id->getNext();
    }
@@ -560,7 +560,7 @@ int cGraph::buildFunc(cInstruction *_func)
             id->allocate(exregSize);
             exregSize += id->getLen();
          }
-      } 
+      }
       id=(cIdentifier *)id->getNext();
    }
 
@@ -597,11 +597,11 @@ int cGraph::buildFunc(cInstruction *_func)
    classInfo->pointerSize=pointerSize;
    classInfo->shareSize=shareSize;
    classInfo->privateSize=privateSize;
-   classInfo->exregSize=exregSize;   
+   classInfo->exregSize=exregSize;
    }
 
    // ------------------------------------------
-   // Allocate function parameter variables... 
+   // Allocate function parameter variables...
    // --------------------------------------------
 
    privateSize = ((privateSize+VECTOR_WIDTH-1)/VECTOR_WIDTH)*VECTOR_WIDTH;
@@ -639,7 +639,7 @@ int cGraph::buildFunc(cInstruction *_func)
    }
    if(intParmSize > MAX_IREGISTER_AUTO_SIZE)
    {
-      error(M_currFunc->m_lineNo,"out of integer auto memory"); 
+      error(M_currFunc->m_lineNo,"out of integer auto memory");
       return -1;
    }
 
@@ -673,7 +673,7 @@ int cGraph::buildFunc(cInstruction *_func)
    {
    }
 
-   classInfo->pointerAvail=MIN(classInfo->pointerAvail,(availPointerSize-pointerSize));    
+   classInfo->pointerAvail=MIN(classInfo->pointerAvail,(availPointerSize-pointerSize));
 
    // Allocate using integer space for integer variables that can also be assigned to pointer space
    if(allocateGraph(&M_intColor,&intSize,availIntSize,false,-1,MAX_INT_SIZE-intParmSize-1,BOT2TOP) < 0)
@@ -769,11 +769,11 @@ int cGraph::buildFunc(cInstruction *_func)
          else if(id->isKindOf(cIdentifierShared::getCLID()))
          {
             error(0,"Invalid function parameter");
-         } 
+         }
          else if(id->isKindOf(cIdentifierInteger::getCLID()))
          {
             error(0,"Invalid function parameter");
-         } 
+         }
          else if(id->isKindOf(cIdentifierPointer::getCLID()))
          {
             error(0,"Invalid function parameter");
@@ -788,8 +788,10 @@ int cGraph::buildFunc(cInstruction *_func)
    }
    if((_func->m_maxNumThreads*ROUND(privateSize,VECTOR_WIDTH)+ROUND(shareSize,VECTOR_WIDTH)) > (1<<REGISTER_ACTUAL_FILE_DEPTH))
    {
+      printf("%d, %d, %d, %d, %d\n",_func->m_maxNumThreads, privateSize,shareSize, VECTOR_WIDTH, REGISTER_ACTUAL_FILE_DEPTH);
       error(M_currFunc->m_lineNo,"out of memory for pcore memory space");
       return -1;
    }
+   //printf("%d, %d, %d, %d, %d\n",_func->m_maxNumThreads, privateSize,shareSize, VECTOR_WIDTH, REGISTER_ACTUAL_FILE_DEPTH);
    return 0;
 }
