@@ -68,7 +68,7 @@ Grayscale, resize to 28×28 — [batch_lenet_test.py](Batch_Test/batch_lenet_tes
 quantize with `scale ≈ 1/255`, `zero_point = −128` (i.e. `q = pixel − 128`),
 giving 1×28×28 = **784 bytes**.
 
-## Test harness
+## Test Scripts
 
 The FPGA runs are driven by the batch scripts under [`Batch_Test/`](Batch_Test):
 
