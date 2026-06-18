@@ -92,7 +92,13 @@ Point `--images` at your own MNIST / ImageNet-val directory for a full run.
 ## Step-by-step FPGA setup
 
 ### 1. Build the FPGA bitstream
-See [Documentation/Vivado.md](Documentation/Vivado.md).
+See [Documentation/Vivado.md](Documentation/Vivado.md). The default frequency in `HW/examples/GHRD/create_project.tcl` is 125MHz. Although you can still run the full batch test with this, to meet the timing requirements, you need 
+to change `CLK5` to `83.333` and `CLK6` to `166.66`.
+```
+CONFIG.CLKOUT5_REQUESTED_OUT_FREQ {83.33} \
+CONFIG.CLKOUT6_USED {true} \
+CONFIG.CLKOUT6_REQUESTED_OUT_FREQ {166.66} \
+```
 
 ### 2. Build the firmware
 ```bash
