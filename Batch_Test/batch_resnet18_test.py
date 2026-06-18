@@ -1,77 +1,36 @@
 """
-Batch ImageNet accuracy test for ztachip ResNet18 (Linux only).
+Batch ImageNet accuracy test for ztachip ResNet-18 (Linux only).
 
-Serial reception strategy
--------------------------
-We do NOT use pyserial.read() — it has been observed to drop bytes at high
-baud rates. Instead we shell out to the same `sed` pipeline you've been
-using manually:
+One persistent GDB session loads ztachip.elf once, then for each image we
+`restore` the preprocessed input into the firmware input array and `continue`
+for a single inference. UART output is captured with `sed` (more reliable than
+pyserial at high baud, which drops bytes):
 
-    sed '/TEST_MODEL_PASS_END/q' /dev/ttyUSBx > capture_NNN.bin
+    sed '/TEST_MODEL_PASS_END/q' <port> > capture_NNN.bin
 
-`sed` reads from the tty directly via the kernel and exits when the marker
-is seen. Python only orchestrates start/stop, file naming, and parsing.
+Per-image loop (CPU halted at `break test` between inferences):
+    restore <input.bin> binary &ILSVRC2012_val_00000001_raw
+    start sed
+    continue        # one test() iteration runs, sed captures, halts at next break
 
-Persistent GDB + breakpoint-synchronized flow
----------------------------------------------
-ONE GDB process drives the whole batch via a PTY. All setup (file/target/
-reset/load/break/continue-to-first-break) happens once at startup. A break
-at the start of test() bounds every inference cycle so input swaps land at
-a clean point — no race against test_resnet18() freading the input array.
-
-  Startup (one-time, in GdbSession.__init__):
-      set pagination off / set confirm off
-      file <elf>
-      target extended-remote localhost:<port>
-      monitor reset halt
-      load
-      break test
-      continue                ← runs crt0 + main(), halts at first test()
-
-  Per image (in the main loop):
-      restore <raw.bin> binary &ILSVRC2012_val_00000001_raw
-      flush serial buffer
-      start sed
-      continue                ← runs test() (UART output, sed captures),
-                                returns to while(1), calls test() again,
-                                hits break → CPU halted, GDB returns
-      wait sed (already exited)
-
-  Shutdown:
-      quit
-
-Input swap mechanism
---------------------
-The firmware's test_resnet18() does
-    fopen("ILSVRC2012_val_00000001_raw.bin","rb")
+The firmware's test_resnet18() does fopen("ILSVRC2012_val_00000001_raw.bin"),
 which the fake filesystem in SW/base/simplelib.c maps to the C array
-`ILSVRC2012_val_00000001_raw` (from SW/fs/gen/ILSVRC2012_val_00000001_raw.c).
-We `restore` each preprocessed image directly over that array while the CPU
-is halted — no classifier_input, no BMP decode on target. The restored blob
-must be exactly 3*224*224 = 150528 bytes (sizeof the array).
+`ILSVRC2012_val_00000001_raw`. We restore each image over that array while the
+CPU is halted, so the following fread() reads the fresh bytes. The blob must be
+exactly 3*224*224 = 150528 bytes.
 
-Synchronization with GDB
-------------------------
-GDB runs in a PTY (so its stdout is line-buffered). Each command is
-followed by an `echo \\n<MARKER>\\n` and we read GDB's output until
-<MARKER> appears. For blocking commands like `continue`, the echo only
-runs after the breakpoint is hit, so we naturally block until inference
-is done.
+GDB runs in a PTY so its stdout is line-buffered. Each command is followed by
+`echo \\n<MARKER>\\n`; we read until <MARKER> appears, so a blocking `continue`
+returns only after the breakpoint is hit.
 
-Preprocessing
--------------
-Matches the golden resnet_to_raw() flow exactly (everything happens here,
-the firmware consumes the bytes as-is):
-    RGB → resize shorter side to 256 (bilinear) → 224x224 center crop
-    → float32 → RGB-to-BGR → subtract ImageNet mean (B 103.939, G 116.779,
-    R 123.680) → quantize q = round(x/scale + zp), scale=0.01865844801068306,
-    zp=-14, clip [-128,127] int8 → HWC-to-CHW → raw bytes (150528 B).
+Preprocessing (torch-style, see preprocess_imagenet): aspect-preserving resize
+of the shorter side to 256, center crop to 224x224, scale to [0, 1], normalize
+with ImageNet mean/std, quantize to int8 with the model's input scale/zero_point,
+reorder HWC->CHW. Returns 150528 raw bytes.
 
-Labels note
------------
-ResNet18 outputs 1000 classes (ids 0..999, no background class). Make sure
-the manifest's label ids use the same 0..999 indexing — a manifest built
-for a 1001-class MobileNet (background at id 0) is off by one.
+Labels: ResNet-18 outputs 1000 classes (ids 0..999, no background). The manifest
+label ids must use the same 0..999 indexing (a 1001-class MobileNet manifest with
+background at id 0 is off by one).
 """
 
 import argparse
@@ -96,11 +55,9 @@ from PIL import Image
 DEFAULT_PORT      = "/dev/ttyUSB1"
 DEFAULT_BAUD      = 4_000_000
 DEFAULT_OPENOCD   = 3333
-#INFERENCE_TIMEOUT = 90        # seconds for one inference's UART output
 INFERENCE_TIMEOUT = 240        # seconds for one inference's UART output
 GDB_TIMEOUT       = 120
 
-#PROJECT_ROOT = Path(__file__).parent.resolve()
 PROJECT_ROOT = Path.home() / "workdir" / "ztachip"
 ELF_DEFAULT  = PROJECT_ROOT / "SW" / "build" / "ztachip.elf"
 END_MARKER   = "TEST_MODEL_PASS_END"
@@ -121,12 +78,10 @@ INPUT_ZERO_POINT = -14
 
 def preprocess_imagenet(img_path: str) -> bytes:
     """
-    Mirror of the golden resnet_to_raw(): resize shorter side to 256
-    (bilinear), 224x224 center crop, RGB→BGR, subtract ImageNet mean,
-    quantize to int8 with the model's input scale/zero_point, HWC→CHW.
-
-    Output is exactly INPUT_BYTES (150528) raw int8 bytes — the firmware
-    freads them straight into the input tensor, no conversion on target.
+    Torch-style ResNet preprocessing: aspect-preserving resize of the shorter
+    side to 256 (bilinear), center crop to 224x224, scale to [0, 1], normalize
+    with ImageNet mean/std, quantize to int8 with the model's input
+    scale/zero_point, reorder HWC -> CHW. Returns INPUT_BYTES (150528) bytes.
     """
     img = Image.open(img_path).convert("RGB")
     w, h = img.size
@@ -143,23 +98,12 @@ def preprocess_imagenet(img_path: str) -> bytes:
 
     left = (new_w - INPUT_W) // 2
     top = (new_h - INPUT_H) // 2
-    right = left + INPUT_W
-    bottom = top + INPUT_H
-
-    img = img.crop((left, top, right, bottom))
+    img = img.crop((left, top, left + INPUT_W, top + INPUT_H))
 
     IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
     IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-    arr = np.asarray(img).astype(np.float32) / 255.0   # HWC, RGB, [0,1]
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD         # HWC, RGB, normalized
-
-    ## RGB -> BGR
-    #arr = arr[..., ::-1]
-
-    ## subtract ImageNet mean, channel order is now BGR
-    #arr[..., 0] -= 103.939  # B
-    #arr[..., 1] -= 116.779  # G
-    #arr[..., 2] -= 123.680  # R
+    arr = np.asarray(img).astype(np.float32) / 255.0   # HWC, RGB, [0, 1]
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD          # normalize
 
     arr_q = np.round(arr / INPUT_SCALE + INPUT_ZERO_POINT)
     arr_q = np.clip(arr_q, -128, 127).astype(np.int8)
@@ -177,19 +121,6 @@ def stty_configure(port: str, baud: int) -> None:
         ["stty", "-F", port, str(baud), "raw", "-echo"],
         check=True,
     )
-
-
-def flush_serial_input(port: str) -> None:
-    """
-    Discard any bytes already queued in the OS input buffer for `port`.
-    Uses termios.tcflush — does not read into Python, so cannot drop bytes.
-    Equivalent to the kernel-level tcflush(TCIFLUSH).
-    """
-    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-    try:
-        termios.tcflush(fd, termios.TCIFLUSH)
-    finally:
-        os.close(fd)
 
 
 def start_sed_capture(port: str, marker: str, out_path: Path) -> subprocess.Popen:
@@ -230,37 +161,17 @@ class GdbTimeout(Exception):
 
 class GdbSession:
     """
-    Long-running GDB process for the entire batch.
+    Long-running GDB process driving the whole batch over a PTY.
 
-    Lifecycle
-    ---------
-      __init__:  spawn GDB inside a PTY (so its stdout is line-buffered),
-                 then do all one-time setup:
-                     set pagination off / set confirm off
-                     file <elf>
-                     target extended-remote localhost:<port>
-                     monitor reset halt
-                     load
-                     break <bp_symbol>
-                     continue            ← blocks until first test() break hits
-                 → returns with CPU halted at first test() entry
-      restore(raw_path): send `restore <raw_path> binary &ILSVRC2012_val_00000001_raw`
-      cont(timeout):     send `continue`, block until next break is hit
-      close():           send `quit`, reap process
+      __init__:          one-time setup — file/target/reset/load/break, then
+                         continue to halt at the first test() entry.
+      restore(raw_path): restore <raw_path> binary &ILSVRC2012_val_00000001_raw
+      cont(timeout):     continue, block until the next break is hit
+      close():           quit and reap the process
 
-    Synchronization
-    ---------------
-    GDB executes commands sequentially. Each command we send is followed by
-    `echo \\n<MARKER>\\n` where MARKER is unique per call. We read GDB's stdout
-    until MARKER appears — that means GDB finished the previous command. For a
-    blocking command like `continue`, the echo only runs after the breakpoint
-    is hit, so we naturally block until inference is done.
-
-    Why a PTY
-    ---------
-    With plain pipes, GDB block-buffers its stdout (4 KB at a time), so we'd
-    sit waiting for output forever. A PTY makes GDB think it's interactive,
-    and it line-buffers as expected.
+    Each command is followed by `echo \\n<MARKER>\\n`; reading until MARKER
+    means the command finished. A PTY (not a pipe) keeps GDB's stdout
+    line-buffered so we don't block on its 4 KB pipe buffer.
     """
 
     def __init__(self, gdb_path: str, elf: str, openocd_port: int,
@@ -638,23 +549,21 @@ def main():
                 print(f"{tag} {fname:<45} gt={gt:>4}",
                       end="  ", flush=True)
 
-                # 1. preprocess (resize/crop/BGR/mean/quantize/CHW → raw int8)
+                # 1. preprocess (resize/crop/normalize/quantize/CHW -> raw int8)
                 try:
                     raw = preprocess_imagenet(str(p))
                 except Exception as e:
                     print(f"IMG_ERR {e}")
                     continue
 
-                # 2. write raw blob to a temp file (GDB `restore` reads from disk)
+                # 2. write the raw input to a temp file (GDB restore reads from disk)
                 with tempfile.NamedTemporaryFile(suffix=".bin",
                                                   delete=False) as bf:
                     bf.write(raw)
                     raw_path = bf.name
                 t_restore = t_infer = 0.0
                 try:
-                    # 3. restore via the persistent GDB session
-                    #    (CPU is halted at break test() from the previous
-                    #    iteration's `continue`)
+                    # 3. restore into the firmware input array (CPU halted at break test)
                     try:
                         t0 = time.monotonic()
                         gdb.restore(raw_path, timeout=30)
@@ -664,22 +573,14 @@ def main():
                         print(f"GDB_RESTORE_FAIL — aborting batch: {e}")
                         break
 
-                    # 4. drain serial buffer (kernel-level)
-                    #try:
-                    #    flush_serial_input(args.port)
-                    #except Exception as e:
-                    #    print(f"FLUSH_ERR {e}")
-                    #    continue
-
-                    # 5. start sed BEFORE we let the CPU run
+                    # 4. start sed BEFORE we let the CPU run
                     cap_path = cap_dir / f"capture_{gidx:06d}.bin"
                     sed_proc = start_sed_capture(args.port, END_MARKER,
                                                   cap_path)
                     time.sleep(args.sed_startup_delay)
 
-                    # 6. continue → CPU runs one test() iteration, prints
-                    #    output (sed captures), returns, hits break at next
-                    #    iteration → GDB's `continue` returns
+                    # 5. continue → one test() iteration runs, sed captures its
+                    #    UART output, CPU halts at the next break → continue returns
                     try:
                         t0 = time.monotonic()
                         gdb.cont(timeout=args.inference_timeout + 30)
@@ -689,8 +590,7 @@ def main():
                         print(f"GDB_CONT_FAIL — aborting batch: {e}")
                         break
 
-                    # 7. sed should already have exited (PASS_END came before
-                    #    the next iteration's break)
+                    # 6. sed should already have exited on the PASS_END marker
                     if not wait_sed(sed_proc, 10):
                         print(f"SED_TIMEOUT (cap={cap_path.name})")
                         continue

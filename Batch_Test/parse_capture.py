@@ -6,7 +6,7 @@ Offline UART capture splitter.
 
 Run after grabbing a raw capture from the FPGA, e.g.:
     stty -F /dev/ttyUSB0 1000000 raw -echo
-    sed '/TEST_MOBINET_PASS_END/q' /dev/ttyUSB0 > capture.bin
+    sed '/TEST_MODEL_PASS_END/q' /dev/ttyUSB0 > capture.bin
 
 Then:
     python parse_capture.py capture.bin
@@ -26,20 +26,22 @@ from uart_monitor import (
 )
 
 
+# The first timing line is "CreateWithBitmap" (MobileNet) or "Load Input"
+# (ResNet-18 / LeNet) depending on the firmware test function — accept either.
 TIMING_RE = re.compile(
-    r"CreateWithBitmap\s*:\s*([0-9.]+)\s*s.*?"
+    r"(?:CreateWithBitmap|Load Input)\s*:\s*([0-9.]+)\s*s.*?"
     r"Model Parse\s*:\s*([0-9.]+)\s*s.*?"
     r"Inference\s*:\s*([0-9.]+)\s*s.*?"
     r"Total\s*:\s*([0-9.]+)\s*s",
     re.DOTALL
 )
 
-TIMING_FIELDS = ["create_bitmap", "model_parse", "inference", "total"]
+TIMING_FIELDS = ["load_input", "model_parse", "inference", "total"]
 TIMING_LABELS = {
-    "create_bitmap": "CreateWithBitmap",
-    "model_parse":   "Model Parse",
-    "inference":     "Inference",
-    "total":         "Total",
+    "load_input":  "Load Input",
+    "model_parse": "Model Parse",
+    "inference":   "Inference",
+    "total":       "Total",
 }
 
 
@@ -48,10 +50,10 @@ def parse_timing(text):
     if not m:
         return None
     return {
-        "create_bitmap": float(m.group(1)),
-        "model_parse":   float(m.group(2)),
-        "inference":     float(m.group(3)),
-        "total":         float(m.group(4)),
+        "load_input":  float(m.group(1)),
+        "model_parse": float(m.group(2)),
+        "inference":   float(m.group(3)),
+        "total":       float(m.group(4)),
     }
 
 

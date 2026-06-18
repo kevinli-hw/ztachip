@@ -1,23 +1,18 @@
 """
-Batch MNIST accuracy test for ztachip LeNet (Linux only).
+Batch MNIST accuracy test for ztachip LeNet-5 (Linux only).
 
-Same GDB + sed architecture as batch_imagenet_test.py — see that file for
-details on the serial/GDB synchronization strategy.
+Same GDB + sed architecture as batch_imagenet_test.py / batch_resnet18_test.py:
+one persistent GDB session, and for each image we `restore` the preprocessed
+input into the firmware input array and `continue` for one inference, capturing
+UART output with `sed '/TEST_MODEL_PASS_END/q'`.
 
-Preprocessing
--------------
-MNIST test images are 28x28 grayscale PNGs organized as:
-    test_images/0/test_00000.png
-    test_images/1/test_00001.png
-    ...
-Label file format:  <subfolder/filename> <label>
-    7/test_00000.png 7
-    2/test_00001.png 2
+MNIST test images are 28x28 grayscale PNGs laid out as <label>/<file>.png; the
+label file has one `subfolder/filename label` per line, e.g. `7/test_00000.png 7`.
 
-Each image is converted to grayscale, quantized to int8 using the model's
-quantization parameters (scale ≈ 1/255, zero_point = -128), and saved as
-a raw 784-byte bin. GDB restores this directly to &classifier_input.
-The firmware reads the pre-quantized int8 data with no further processing.
+Preprocessing (see preprocess_mnist): grayscale, resize to 28x28, quantize to
+int8 with the model's input scale (1/255) and zero_point (-128) — i.e.
+q = pixel - 128 — giving a 784-byte blob restored to &mnist_test_label_0. The
+firmware freads the pre-quantized int8 directly.
 """
 
 import argparse
@@ -56,13 +51,10 @@ def preprocess_mnist(img_path: str) -> bytes:
     """
     Convert a MNIST test image to pre-quantized int8 raw data (784 bytes).
 
-    Quantization uses the model's input parameters:
-        scale  = 0.003921568859368563  (≈ 1/255)
-        zero_point = -128
-        q = round(pixel/255 / scale) + zero_point = pixel - 128
-
-    The output is 784 bytes of int8 data in row-major order (1×28×28),
-    written directly to &classifier_input via GDB restore.
+    Grayscale, resize to 28x28, then quantize with the model's input params
+    (scale = 0.003921568859368563 ≈ 1/255, zero_point = -128), i.e.
+    q = round(pixel/255 / scale) + zero_point = pixel - 128. Output is 784 int8
+    bytes (1x28x28, row-major), restored to &mnist_test_label_0 via GDB.
     """
     img = Image.open(img_path).convert("L")
     img = img.resize((28, 28), Image.BILINEAR)
@@ -82,14 +74,6 @@ def stty_configure(port: str, baud: int) -> None:
         ["stty", "-F", port, str(baud), "raw", "-echo"],
         check=True,
     )
-
-
-def flush_serial_input(port: str) -> None:
-    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-    try:
-        termios.tcflush(fd, termios.TCIFLUSH)
-    finally:
-        os.close(fd)
 
 
 def start_sed_capture(port: str, marker: str, out_path: Path) -> subprocess.Popen:

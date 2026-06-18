@@ -320,21 +320,16 @@ def process_session(text, session_idx):
 
 # ── Main loop: read-only, defer processing to session boundary ─────────────────
 
-# Any of these substrings (case-insensitive) marks the beginning of a session.
-# Different test entry points in test.cpp print different banners:
-#   test_mobinet()       → "Total layers: 68"
-#   test_model()         → "model test start."
-#   test_mobilenet_v2()  → "mobilenet test start."
+# Substring (case-insensitive) that marks the start of a session. The test()
+# dispatcher in test.cpp prints "test start" at the top of every inference.
 SESSION_MARKERS = (
-    b"total layers:",
-    b"model test start",
-    b"mobilenet test start",
+    b"test start",
 )
 
-# End-of-pass marker printed by test_mobinet() when one full inference completes.
-# When seen, the current session is finalized immediately — no need to wait for
-# the next session's start marker.
-END_MARKER = b"test_mobinet_pass_end"
+# End-of-pass marker printed when one full inference completes (test.cpp prints
+# "========== TEST_MODEL_PASS_END =========="). When seen, the current session
+# is finalized immediately — no need to wait for the next session's start marker.
+END_MARKER = b"test_model_pass_end"
 
 
 def _find_next_marker(buf, start):
@@ -437,8 +432,8 @@ def main():
                 last_heartbeat = len(raw)
 
             # ── END marker check (only meaningful while a session is active) ──
-            # When test_mobinet() finishes one pass, it prints
-            #   "========== TEST_MOBINET_PASS_END =========="
+            # When a test pass finishes the firmware prints
+            #   "========== TEST_MODEL_PASS_END =========="
             # We finalize the current session immediately on seeing this — no
             # need to wait for the next session's start banner.
             if session_start is not None:
